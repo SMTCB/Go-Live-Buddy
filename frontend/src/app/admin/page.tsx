@@ -38,7 +38,7 @@ export default function AdminDashboard() {
         setIsSubmitting(true);
         setSubmitStatus(null);
         try {
-            const response = await fetch('http://localhost:8000/api/ingest', {
+            const response = await fetch('/api/ingest', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

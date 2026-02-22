@@ -388,33 +388,63 @@ export default function ChatInterface() {
           {!panelSources || panelSources.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center mt-8">No source citations available for this response.</p>
           ) : (
-            panelSources.map((src, i) => (
-              <div key={i} className="border border-border rounded-xl p-4 bg-[#FAFAFA] flex flex-col gap-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-primary uppercase tracking-wider">
-                    {src.metadata?.type === 'jira_ticket' ? '🎫 JIRA Ticket' : '🎬 Video Frame'}
-                    {src.metadata?.frame_index != null ? ` #${src.metadata.frame_index}` : ''}
-                  </span>
-                  <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${src.score >= 0.7 ? 'bg-green-100 text-green-700' :
-                      src.score >= 0.5 ? 'bg-yellow-100 text-yellow-700' :
-                        'bg-gray-100 text-gray-600'
-                    }`}>
-                    {Math.round(src.score * 100)}% match
-                  </span>
+            panelSources.map((src, i) => {
+              const isVideo = src.metadata?.type !== 'jira_ticket';
+              const sourceUrl = src.metadata?.source as string | undefined;
+              const frameIndex = src.metadata?.frame_index as number | undefined;
+
+              // Extract YouTube video ID and compute timestamp
+              let videoId: string | null = null;
+              let timestampSec = 0;
+              if (isVideo && sourceUrl) {
+                const m = sourceUrl.match(/(?:v=|youtu\.be\/)([^&?/]+)/);
+                videoId = m ? m[1] : null;
+                timestampSec = (frameIndex ?? 0) * 30; // 30s interval per frame
+              }
+              const thumbnailUrl = videoId ? `https://img.youtube.com/vi/${videoId}/hqdefault.jpg` : null;
+              const videoLink = videoId ? `https://www.youtube.com/watch?v=${videoId}&t=${timestampSec}s` : sourceUrl;
+
+              return (
+                <div key={i} className="border border-border rounded-xl overflow-hidden bg-[#FAFAFA] flex flex-col">
+                  {/* Thumbnail / Icon header */}
+                  {thumbnailUrl ? (
+                    <a href={videoLink} target="_blank" rel="noopener noreferrer" className="relative block group">
+                      <img src={thumbnailUrl} alt="Video frame" className="w-full h-40 object-cover transition-transform duration-300 group-hover:scale-105" />
+                      <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                        <span className="text-white text-sm font-bold bg-black/60 px-3 py-1.5 rounded-full">▶ Jump to {Math.floor(timestampSec / 60)}:{String(timestampSec % 60).padStart(2, '0')}</span>
+                      </div>
+                      <div className="absolute bottom-2 left-2 bg-black/70 text-white text-xs px-2 py-0.5 rounded-full font-semibold">
+                        🎬 Frame {frameIndex ?? '?'} · {Math.floor(timestampSec / 60)}:{String(timestampSec % 60).padStart(2, '0')}
+                      </div>
+                    </a>
+                  ) : (
+                    <div className="w-full h-16 bg-primary/10 flex items-center justify-center">
+                      <span className="text-2xl">🎫</span>
+                    </div>
+                  )}
+
+                  <div className="p-4 flex flex-col gap-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-primary uppercase tracking-wider">
+                        {isVideo ? '🎬 Video Frame' : '🎫 JIRA Ticket'}
+                      </span>
+                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${src.score >= 0.7 ? 'bg-green-100 text-green-700' :
+                          src.score >= 0.5 ? 'bg-yellow-100 text-yellow-700' :
+                            'bg-gray-100 text-gray-600'
+                        }`}>
+                        {Math.round(src.score * 100)}% match
+                      </span>
+                    </div>
+                    <p className="text-xs text-foreground leading-relaxed line-clamp-5">{src.text}</p>
+                    {videoLink && (
+                      <a href={videoLink} target="_blank" rel="noopener noreferrer" className="text-xs text-primary/70 hover:text-primary hover:underline truncate">
+                        🔗 {isVideo ? `Watch at ${Math.floor(timestampSec / 60)}:${String(timestampSec % 60).padStart(2, '0')}` : sourceUrl}
+                      </a>
+                    )}
+                  </div>
                 </div>
-                <p className="text-sm text-foreground leading-relaxed line-clamp-6">{src.text}</p>
-                {src.metadata?.source && (
-                  <a
-                    href={src.metadata.source as string}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-xs text-primary/70 hover:text-primary hover:underline truncate"
-                  >
-                    🔗 {src.metadata.source}
-                  </a>
-                )}
-              </div>
-            ))
+              );
+            })
           )}
         </div>
       </div>
