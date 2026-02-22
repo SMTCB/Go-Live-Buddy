@@ -1,0 +1,67 @@
+Traceback (most recent call last):
+  File "C:\Users\stcbr\Documents\AI\GoLiveBuddy\venv\Lib\site-packages\google\api_core\grpc_helpers.py", line 55, in error_remapped_callable
+    return callable_(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\stcbr\Documents\AI\GoLiveBuddy\venv\Lib\site-packages\grpc\_interceptor.py", line 276, in __call__
+    response, ignored_call = self._with_call(
+                             ^^^^^^^^^^^^^^^^
+  File "C:\Users\stcbr\Documents\AI\GoLiveBuddy\venv\Lib\site-packages\grpc\_interceptor.py", line 331, in _with_call
+    return call.result(), call
+           ^^^^^^^^^^^^^
+  File "C:\Users\stcbr\Documents\AI\GoLiveBuddy\venv\Lib\site-packages\grpc\_channel.py", line 438, in result
+    raise self
+  File "C:\Users\stcbr\Documents\AI\GoLiveBuddy\venv\Lib\site-packages\grpc\_interceptor.py", line 314, in continuation
+    response, call = self._thunk(new_method).with_call(
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\stcbr\Documents\AI\GoLiveBuddy\venv\Lib\site-packages\grpc\_channel.py", line 1173, in with_call
+    return _end_unary_response_blocking(state, call, True, None)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\stcbr\Documents\AI\GoLiveBuddy\venv\Lib\site-packages\grpc\_channel.py", line 990, in _end_unary_response_blocking
+    raise _InactiveRpcError(state)  # pytype: disable=not-instantiable
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+grpc._channel._InactiveRpcError: <_InactiveRpcError of RPC that terminated with:
+	status = StatusCode.NOT_FOUND
+	details = "Model is not found: models/gemini-1.5-pro for api version v1beta"
+	debug_error_string = "UNKNOWN:Error received from peer ipv4:142.250.178.170:443 {grpc_status:5, grpc_message:"Model is not found: models/gemini-1.5-pro for api version v1beta"}"
+>
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\stcbr\Documents\AI\GoLiveBuddy\backend\test.py", line 3, in <module>
+    import database
+  File "C:\Users\stcbr\Documents\AI\GoLiveBuddy\backend\database.py", line 29, in <module>
+    Settings.llm = Gemini(model="models/gemini-1.5-pro", api_key=os.environ["GOOGLE_API_KEY"])
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\stcbr\Documents\AI\GoLiveBuddy\venv\Lib\site-packages\llama_index\llms\gemini\base.py", line 167, in __init__
+    model_meta = genai.get_model(model)
+                 ^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\stcbr\Documents\AI\GoLiveBuddy\venv\Lib\site-packages\google\generativeai\models.py", line 57, in get_model
+    return get_base_model(name, client=client, request_options=request_options)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\stcbr\Documents\AI\GoLiveBuddy\venv\Lib\site-packages\google\generativeai\models.py", line 100, in get_base_model
+    result = client.get_model(name=name, **request_options)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\stcbr\Documents\AI\GoLiveBuddy\venv\Lib\site-packages\google\ai\generativelanguage_v1beta\services\model_service\client.py", line 800, in get_model
+    response = rpc(
+               ^^^^
+  File "C:\Users\stcbr\Documents\AI\GoLiveBuddy\venv\Lib\site-packages\google\api_core\gapic_v1\method.py", line 128, in __call__
+    return wrapped_func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\stcbr\Documents\AI\GoLiveBuddy\venv\Lib\site-packages\google\api_core\retry\retry_unary.py", line 294, in retry_wrapped_func
+    return retry_target(
+           ^^^^^^^^^^^^^
+  File "C:\Users\stcbr\Documents\AI\GoLiveBuddy\venv\Lib\site-packages\google\api_core\retry\retry_unary.py", line 156, in retry_target
+    next_sleep = _retry_error_helper(
+                 ^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\stcbr\Documents\AI\GoLiveBuddy\venv\Lib\site-packages\google\api_core\retry\retry_base.py", line 216, in _retry_error_helper
+    raise final_exc from source_exc
+  File "C:\Users\stcbr\Documents\AI\GoLiveBuddy\venv\Lib\site-packages\google\api_core\retry\retry_unary.py", line 147, in retry_target
+    result = target()
+             ^^^^^^^^
+  File "C:\Users\stcbr\Documents\AI\GoLiveBuddy\venv\Lib\site-packages\google\api_core\timeout.py", line 130, in func_with_timeout
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\stcbr\Documents\AI\GoLiveBuddy\venv\Lib\site-packages\google\api_core\grpc_helpers.py", line 57, in error_remapped_callable
+    raise exceptions.from_grpc_error(exc) from exc
+google.api_core.exceptions.NotFound: 404 Model is not found: models/gemini-1.5-pro for api version v1beta

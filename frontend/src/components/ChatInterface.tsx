@@ -1,76 +1,201 @@
 'use client';
-import { useChat } from '@ai-sdk/react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+
+type Message = { id: string; role: 'user' | 'assistant'; content: string };
 
 export default function ChatInterface() {
-  const { messages, input, handleInputChange, handleSubmit, isLoading } = useChat();
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [input, setInput] = useState('');
   const [visualProof, setVisualProof] = useState<string | null>(null);
+  const [isSending, setIsSending] = useState(false);
+  const [techCategory, setTechCategory] = useState('sap-pack');
+  const [isVisualProofOpen, setIsVisualProofOpen] = useState(false);
+
+  useEffect(() => {
+    const userMessages = messages.filter(m => m.role === 'user');
+    if (userMessages.length > 0) {
+      const lastUserMsg = userMessages[userMessages.length - 1];
+      if (typeof lastUserMsg?.content === 'string') {
+        const text = lastUserMsg.content.toLowerCase();
+        if (text.includes('fiori') || text.includes('sap')) {
+          setVisualProof('https://plus.unsplash.com/premium_photo-1681488198642-1e96a4ab2620?q=80&w=600');
+          setIsVisualProofOpen(true);
+        } else if (text.includes('crm') || text.includes('lead')) {
+          setVisualProof('https://images.unsplash.com/photo-1551288049-bebda4e38f71?q=80&w=600');
+          setIsVisualProofOpen(true);
+        }
+      }
+    }
+  }, [messages]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!input.trim() || isSending) return;
+
+    const currentInput = input;
+    setInput('');
+    setIsSending(true);
+
+    const userMessage: Message = { id: Date.now().toString(), role: 'user', content: currentInput };
+    const newMessages = [...messages, userMessage];
+    setMessages(newMessages);
+
+    const assistantId = (Date.now() + 1).toString();
+    setMessages((prev) => [...prev, { id: assistantId, role: 'assistant', content: '' }]);
+
+    try {
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: newMessages, namespace: techCategory }),
+      });
+
+      if (!response.ok) throw new Error('API Request Failed');
+
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+
+      if (reader) {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          const chunk = decoder.decode(value, { stream: true });
+          setMessages((prev) =>
+            prev.map((m) => (m.id === assistantId ? { ...m, content: m.content + chunk } : m))
+          );
+        }
+      }
+    } catch (err) {
+      console.error('Submit error:', err);
+      setInput(currentInput);
+    } finally {
+      setIsSending(false);
+    }
+  };
 
   return (
-    <div className="flex h-screen w-full bg-slate-50 relative overflow-hidden">
-      <div className="flex-1 flex flex-col h-full max-w-4xl mx-auto p-4 transition-all duration-300">
-        <header className="mb-4">
-          <h1 className="text-2xl font-bold text-slate-800">Go-Live Buddy</h1>
-          <p className="text-slate-500 text-sm">Professional Multi-Tech AI Knowledge Portal</p>
+    <div className="flex h-screen w-full bg-background relative overflow-hidden font-sans">
+      <div className="flex-1 flex flex-col h-full max-w-5xl mx-auto p-6 transition-all duration-300">
+        <header className="mb-6 flex items-center justify-between border-b pb-4">
+          <div>
+            <h1 className="text-3xl font-extrabold text-primary tracking-tight">Go-Live Buddy</h1>
+            <p className="text-muted-foreground text-sm mt-1">Premium Multi-Tech AI Knowledge Portal</p>
+          </div>
+          <div className="flex items-center gap-3 bg-card px-4 py-2 border rounded-full shadow-sm">
+            <span className="text-sm font-semibold text-foreground">Viewing:</span>
+            <select
+              value={techCategory}
+              onChange={(e) => setTechCategory(e.target.value)}
+              className="bg-transparent border-none text-sm font-bold text-primary focus:outline-none cursor-pointer"
+            >
+              <option value="sap-pack">SAP FI</option>
+              <option value="crm-pack">Salesforce CRM</option>
+            </select>
+          </div>
         </header>
-        
-        <ScrollArea className="flex-1 pr-4 mb-4 border rounded-xl bg-white shadow-sm p-4">
-          <div className="flex flex-col gap-4">
+
+        <ScrollArea className="flex-1 pr-4 mb-6 relative">
+          <div className="flex flex-col gap-6 pb-4">
             {messages.length === 0 && (
-              <div className="text-center text-slate-400 mt-20">
-                Ask me about SAP Fiori or Salesforce CRM!
+              <div className="text-center text-muted-foreground mt-32 flex flex-col items-center">
+                <div className="w-16 h-16 bg-primary/10 text-primary rounded-full flex items-center justify-center mb-4 text-2xl">🤖</div>
+                <p className="text-lg">Ask me about {techCategory === 'sap-pack' ? 'SAP Fiori' : 'Salesforce CRM'}!</p>
               </div>
             )}
             {messages.map((m) => (
-              <div key={m.id} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                <div className={`px-4 py-2 rounded-xl max-w-[80%] ${m.role === 'user' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-800'}`}>
-                  {m.content}
+              <div key={m.id || Math.random().toString()} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                <div
+                  className={`px-5 py-4 rounded-2xl max-w-[85%] shadow-sm ${m.role === 'user'
+                      ? 'bg-primary text-primary-foreground rounded-br-sm'
+                      : 'bg-[#F1F1EF] text-[#000000] border border-[#CFCFCF] rounded-bl-sm'
+                    }`}
+                >
+                  {typeof m.content === 'string' ? m.content : JSON.stringify(m.content)}
+
+                  {/* Mock citation button that triggers drawer */}
+                  {m.role === 'assistant' && visualProof && m.content.length > 50 && (
+                    <div className="mt-3 pt-3 border-t border-[#CFCFCF] flex justify-end">
+                      <button
+                        onClick={() => setIsVisualProofOpen(true)}
+                        className="text-xs font-semibold text-primary hover:underline flex items-center gap-1"
+                      >
+                        <span>📄</span> View Source
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             ))}
-            {isLoading && (
+            {isSending && (
               <div className="flex justify-start">
-                <div className="px-4 py-2 rounded-xl bg-slate-100 text-slate-500 animate-pulse">
-                  Buddy is typing...
+                <div className="px-5 py-4 rounded-2xl bg-[#F1F1EF] border border-[#CFCFCF] rounded-bl-sm flex gap-1 items-center h-12">
+                  <span className="w-2 h-2 rounded-full bg-primary animate-bounce"></span>
+                  <span className="w-2 h-2 rounded-full bg-primary animate-bounce delay-100"></span>
+                  <span className="w-2 h-2 rounded-full bg-primary animate-bounce delay-200"></span>
                 </div>
               </div>
             )}
           </div>
         </ScrollArea>
 
-        <form onSubmit={handleSubmit} className="flex gap-2">
-          <Input 
-            value={input} 
-            onChange={handleInputChange} 
-            placeholder="How do I navigate Fiori? Or convert a Lead in CRM?" 
-            className="flex-1 shadow-sm"
+        <form onSubmit={handleSubmit} className="flex gap-3 relative">
+          <Input
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder={`Ask a question about ${techCategory === 'sap-pack' ? 'SAP FI' : 'Salesforce CRM'}...`}
+            className="flex-1 shadow-sm h-14 rounded-full px-6 border-2 focus-visible:ring-primary text-base"
           />
-          <Button type="submit" disabled={isLoading} className="bg-blue-600 hover:bg-blue-700 shadow-sm">
-            Send
+          <Button type="submit" disabled={isSending} className="h-14 w-14 rounded-full shadow-sm">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6">
+              <path d="M3.478 2.404a.75.75 0 0 0-.926.941l2.432 7.905H13.5a.75.75 0 0 1 0 1.5H4.984l-2.432 7.905a.75.75 0 0 0 .926.94 60.519 60.519 0 0 0 18.445-8.986.75.75 0 0 0 0-1.218A60.517 60.517 0 0 0 3.478 2.404Z" />
+            </svg>
           </Button>
         </form>
       </div>
 
-      <div className="w-80 h-full bg-white border-l shadow-xl p-4 flex flex-col hidden lg:flex">
-        <h2 className="text-lg font-semibold text-slate-700 mb-4 flex items-center gap-2">
-          <span className="text-blue-500">📄</span> Visual Proof
-        </h2>
-        <Card className="flex-1 bg-slate-50 border-dashed border-2 flex flex-col items-center justify-center p-4 text-center">
+      {/* Visual Proof Drawer */}
+      <div
+        className={`fixed top-0 right-0 w-96 h-full bg-white border-l shadow-2xl p-6 flex flex-col transform transition-transform duration-300 z-50 ${isVisualProofOpen ? 'translate-x-0' : 'translate-x-full'}`}
+      >
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-xl font-bold text-foreground flex items-center gap-2">
+            <span className="text-primary">📄</span> Visual Proof
+          </h2>
+          <button onClick={() => setIsVisualProofOpen(false)} className="text-muted-foreground hover:text-foreground">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <Card className="flex-1 bg-card border-none flex flex-col items-center justify-center p-0 text-center overflow-hidden rounded-xl shadow-inner">
           {visualProof ? (
-            <div className="w-full h-full object-cover">
-              <img src={visualProof} alt="Visual Proof" className="rounded-md object-contain h-full" />
+            <div className="w-full h-full relative group">
+              <img src={visualProof} alt="Visual Proof" className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
+              <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-4 text-left">
+                <p className="text-white text-sm font-semibold">Source Citation</p>
+                <p className="text-white/80 text-xs">Extracted frame from matched document.</p>
+              </div>
             </div>
           ) : (
-            <div className="text-sm text-slate-400">
+            <div className="text-sm text-muted-foreground p-6">
               Citations and visual proof will appear here when Go-Live Buddy references documentation.
             </div>
           )}
         </Card>
       </div>
+
+      {/* Backdrop for drawer */}
+      {isVisualProofOpen && (
+        <div
+          className="fixed inset-0 bg-black/20 z-40 lg:hidden"
+          onClick={() => setIsVisualProofOpen(false)}
+        />
+      )}
     </div>
   );
 }

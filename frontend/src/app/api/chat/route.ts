@@ -1,5 +1,3 @@
-import { StreamingTextResponse } from 'ai';
-
 export const maxDuration = 30;
 
 export async function POST(req: Request) {
@@ -19,5 +17,9 @@ export async function POST(req: Request) {
         });
     }
 
-    return new StreamingTextResponse(response.body!);
+    return new Response(response.body, {
+        headers: {
+            'Content-Type': 'text/plain; charset=utf-8',
+        },
+    });
 }
