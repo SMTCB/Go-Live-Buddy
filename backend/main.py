@@ -37,8 +37,20 @@ async def chat_endpoint(request: Request):
     
     last_message = messages[-1]["content"] if messages else ""
     
-    # Passing namespace to agent (will update agent.py next)
     return StreamingResponse(query_agent_stream(last_message, namespace), media_type="text/plain")
+
+@app.post("/api/analyze_image")
+async def analyze_image_endpoint(request: Request):
+    from agent import analyze_image_stream
+    data = await request.json()
+    messages = data.get("messages", [])
+    namespace = data.get("namespace", "sap-pack")
+    base64_image = data.get("image", "")
+
+    if "," in base64_image:
+        base64_image = base64_image.split(",")[1]
+
+    return StreamingResponse(analyze_image_stream(messages, namespace, base64_image), media_type="text/plain")
 
 @app.post("/api/ingest")
 async def ingest_endpoint(req: IngestRequest):

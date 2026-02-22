@@ -4,12 +4,16 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useState, useEffect } from 'react';
+import { useDropzone } from 'react-dropzone';
+import { ImagePlus, X } from 'lucide-react';
 
-type Message = { id: string; role: 'user' | 'assistant'; content: string };
+type Message = { id: string; role: 'user' | 'assistant'; content: string; image?: string };
 
 export default function ChatInterface() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
+  const [image, setImage] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [visualProof, setVisualProof] = useState<string | null>(null);
   const [isSending, setIsSending] = useState(false);
   const [techCategory, setTechCategory] = useState('sap-pack');
@@ -32,15 +36,41 @@ export default function ChatInterface() {
     }
   }, [messages]);
 
+  const onDrop = (acceptedFiles: File[]) => {
+    if (acceptedFiles.length > 0) {
+      const file = acceptedFiles[0];
+      setImage(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImagePreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const { getRootProps, getInputProps } = useDropzone({
+    onDrop,
+    accept: { 'image/*': [] },
+    maxFiles: 1,
+  });
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!input.trim() || isSending) return;
+    if ((!input.trim() && !imagePreview) || isSending) return;
 
     const currentInput = input;
+    const currentImage = imagePreview;
     setInput('');
+    setImage(null);
+    setImagePreview(null);
     setIsSending(true);
 
-    const userMessage: Message = { id: Date.now().toString(), role: 'user', content: currentInput };
+    const userMessage: Message = {
+      id: Date.now().toString(),
+      role: 'user',
+      content: currentInput,
+      ...(currentImage && { image: currentImage })
+    };
     const newMessages = [...messages, userMessage];
     setMessages(newMessages);
 
@@ -48,10 +78,15 @@ export default function ChatInterface() {
     setMessages((prev) => [...prev, { id: assistantId, role: 'assistant', content: '' }]);
 
     try {
-      const response = await fetch('/api/chat', {
+      const endpoint = currentImage ? '/api/analyze_image' : '/api/chat';
+      const bodyPayload = currentImage
+        ? { messages: newMessages, namespace: techCategory, image: currentImage }
+        : { messages: newMessages, namespace: techCategory };
+
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: newMessages, namespace: techCategory }),
+        body: JSON.stringify(bodyPayload),
       });
 
       if (!response.ok) throw new Error('API Request Failed');
@@ -72,6 +107,7 @@ export default function ChatInterface() {
     } catch (err) {
       console.error('Submit error:', err);
       setInput(currentInput);
+      if (currentImage) setImagePreview(currentImage);
     } finally {
       setIsSending(false);
     }
@@ -110,10 +146,18 @@ export default function ChatInterface() {
               <div key={m.id || Math.random().toString()} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                 <div
                   className={`px-5 py-4 rounded-2xl max-w-[85%] shadow-sm ${m.role === 'user'
-                      ? 'bg-primary text-primary-foreground rounded-br-sm'
-                      : 'bg-[#F1F1EF] text-[#000000] border border-[#CFCFCF] rounded-bl-sm'
+                    ? 'bg-primary text-primary-foreground rounded-br-sm'
+                    : 'bg-[#F1F1EF] text-[#000000] border border-[#CFCFCF] rounded-bl-sm'
                     }`}
                 >
+                  {m.image && (
+                    <div className="mb-3 p-2 bg-black/10 rounded-lg inline-block">
+                      <div className="text-xs font-bold mb-2 flex items-center gap-1 uppercase tracking-wider text-primary-foreground/90">
+                        <span>👁️</span> Vision Analysis
+                      </div>
+                      <img src={m.image} alt="User upload" className="max-w-[240px] rounded border shadow-sm" />
+                    </div>
+                  )}
                   {typeof m.content === 'string' ? m.content : JSON.stringify(m.content)}
 
                   {/* Mock citation button that triggers drawer */}
@@ -142,18 +186,40 @@ export default function ChatInterface() {
           </div>
         </ScrollArea>
 
-        <form onSubmit={handleSubmit} className="flex gap-3 relative">
-          <Input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder={`Ask a question about ${techCategory === 'sap-pack' ? 'SAP FI' : 'Salesforce CRM'}...`}
-            className="flex-1 shadow-sm h-14 rounded-full px-6 border-2 focus-visible:ring-primary text-base"
-          />
-          <Button type="submit" disabled={isSending} className="h-14 w-14 rounded-full shadow-sm">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6">
-              <path d="M3.478 2.404a.75.75 0 0 0-.926.941l2.432 7.905H13.5a.75.75 0 0 1 0 1.5H4.984l-2.432 7.905a.75.75 0 0 0 .926.94 60.519 60.519 0 0 0 18.445-8.986.75.75 0 0 0 0-1.218A60.517 60.517 0 0 0 3.478 2.404Z" />
-            </svg>
-          </Button>
+        <form onSubmit={handleSubmit} className="flex flex-col gap-3 relative">
+          {imagePreview && (
+            <div className="relative inline-block w-20 h-20 border-2 border-primary/20 rounded-xl overflow-hidden shadow-sm self-start ml-16">
+              <img src={imagePreview} alt="upload preview" className="object-cover w-full h-full" />
+              <button
+                type="button"
+                onClick={() => { setImage(null); setImagePreview(null); }}
+                className="absolute top-1 right-1 bg-black/60 text-white rounded-full p-1 hover:bg-black/80 transition-colors"
+              >
+                <X size={12} />
+              </button>
+            </div>
+          )}
+          <div className="flex gap-3 relative items-center">
+            <div
+              {...getRootProps()}
+              className="cursor-pointer p-3 border-2 border-dashed border-primary/30 rounded-full hover:bg-primary/5 hover:border-primary/60 transition-colors flex items-center justify-center h-14 w-14 group"
+              title="Upload Screenshot"
+            >
+              <input {...getInputProps()} />
+              <ImagePlus className="w-6 h-6 text-primary/70 group-hover:text-primary transition-colors" />
+            </div>
+            <Input
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder={imagePreview ? "Add context for the visual audit..." : `Ask a question about ${techCategory === 'sap-pack' ? 'SAP FI' : 'Salesforce CRM'}...`}
+              className="flex-1 shadow-sm h-14 rounded-full px-6 border-2 focus-visible:ring-primary text-base"
+            />
+            <Button type="submit" disabled={isSending} className="h-14 w-14 rounded-full shadow-sm">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6">
+                <path d="M3.478 2.404a.75.75 0 0 0-.926.941l2.432 7.905H13.5a.75.75 0 0 1 0 1.5H4.984l-2.432 7.905a.75.75 0 0 0 .926.94 60.519 60.519 0 0 0 18.445-8.986.75.75 0 0 0 0-1.218A60.517 60.517 0 0 0 3.478 2.404Z" />
+              </svg>
+            </Button>
+          </div>
         </form>
       </div>
 
