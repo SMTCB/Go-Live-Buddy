@@ -8,5 +8,3 @@ pinecone-client
 python-dotenv
 Pillow
 google-generativeai
-yt-dlp
-opencv-python-headless

@@ -3,6 +3,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 import os
+import sys
+
+# Crucial for Vercel: Add the current directory to Python path so it can resolve local module imports
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
 from dotenv import load_dotenv, find_dotenv
 import asyncio
 from agent import query_agent_stream

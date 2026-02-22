@@ -3,11 +3,15 @@ from dotenv import load_dotenv, find_dotenv
 from llama_index.core import SimpleDirectoryReader, VectorStoreIndex, StorageContext, Document
 from database import get_vector_store
 import sys
-import yt_dlp
-import cv2
 import json
 import google.generativeai as genai
 import PIL.Image
+
+try:
+    import yt_dlp
+    import cv2
+except ImportError:
+    pass # These are optional on Vercel (local ingestion only)
 
 load_dotenv(find_dotenv())
 
