@@ -79,10 +79,14 @@ export default function ChatInterface() {
       if (typeof lastUserMsg?.content === 'string') {
         const text = lastUserMsg.content.toLowerCase();
         if (text.includes('fiori') || text.includes('sap')) {
-          setVisualProof('https://plus.unsplash.com/premium_photo-1681488198642-1e96a4ab2620?q=80&w=600');
+          // Reliable picsum seed: 100 = tech dashboard style
+          setVisualProof('https://picsum.photos/seed/sap-fiori/600/400');
           setIsVisualProofOpen(true);
         } else if (text.includes('crm') || text.includes('lead')) {
-          setVisualProof('https://images.unsplash.com/photo-1551288049-bebda4e38f71?q=80&w=600');
+          setVisualProof('https://picsum.photos/seed/crm-sales/600/400');
+          setIsVisualProofOpen(true);
+        } else {
+          setVisualProof('https://picsum.photos/seed/golivebuddy/600/400');
           setIsVisualProofOpen(true);
         }
       }
@@ -251,8 +255,8 @@ export default function ChatInterface() {
               key={sess.id}
               onClick={() => selectSession(sess.id)}
               className={`group flex items-center gap-2 px-4 py-3 cursor-pointer rounded-lg mx-2 mb-1 transition-colors ${sess.id === activeSessionId
-                  ? 'bg-primary/10 text-primary'
-                  : 'hover:bg-primary/5 text-foreground'
+                ? 'bg-primary/10 text-primary'
+                : 'hover:bg-primary/5 text-foreground'
                 }`}
             >
               <MessageSquare size={14} className="shrink-0 opacity-60" />
@@ -338,10 +342,15 @@ export default function ChatInterface() {
                   <p className="whitespace-pre-wrap leading-relaxed">
                     {typeof m.content === 'string' ? m.content : JSON.stringify(m.content)}
                   </p>
-                  {m.role === 'assistant' && visualProof && m.content.length > 50 && (
+                  {m.role === 'assistant' && m.content.length > 50 && (
                     <div className="mt-3 pt-3 border-t border-[#CFCFCF] flex justify-end">
                       <button
-                        onClick={() => setIsVisualProofOpen(true)}
+                        onClick={() => {
+                          if (!visualProof) {
+                            setVisualProof('https://picsum.photos/seed/golivebuddy/600/400');
+                          }
+                          setIsVisualProofOpen(true);
+                        }}
                         className="text-xs font-semibold text-primary hover:underline flex items-center gap-1"
                       >
                         <span>📄</span> View Source
