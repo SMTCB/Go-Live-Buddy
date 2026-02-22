@@ -1,0 +1,182 @@
+[
+  {
+    "id": "SAP-101",
+    "project": "SAP Fiori",
+    "issue_type": "Bug",
+    "summary": "Missing App Tile on Fiori Launchpad",
+    "description": "User is assigned the Financial Accountant role but cannot see the 'Upload General Journal Entries' tile on their Launchpad.",
+    "status": "Open",
+    "priority": "High"
+  },
+  {
+    "id": "SAP-102",
+    "project": "SAP Fiori",
+    "issue_type": "Question",
+    "summary": "How to use Global Search for a GL Account?",
+    "description": "User is unclear on how to utilize the persistent search bar to find a specific Document Number or GL Account quickly.",
+    "status": "In Progress",
+    "priority": "Low"
+  },
+  {
+    "id": "SAP-103",
+    "project": "SAP Fiori",
+    "issue_type": "Bug",
+    "summary": "Dynamic Tile not updating data",
+    "description": "The 'Days of Sales Outstanding' dynamic tile is showing cached data from yesterday instead of live metrics.",
+    "status": "Open",
+    "priority": "Medium"
+  },
+  {
+    "id": "SAP-104",
+    "project": "SAP Fiori",
+    "issue_type": "Task",
+    "summary": "Customize Theme to High Contrast",
+    "description": "User needs assistance switching the Fiori Launchpad theme from Belize to High Contrast in their user profile.",
+    "status": "Closed",
+    "priority": "Low"
+  },
+  {
+    "id": "SAP-105",
+    "project": "SAP Fiori",
+    "issue_type": "Bug",
+    "summary": "Launchpad performance is sluggish",
+    "description": "UI takes too long to load. Request to disable animations and switch home page display to 'Show one group at a time'.",
+    "status": "Open",
+    "priority": "High"
+  },
+  {
+    "id": "SAP-106",
+    "project": "SAP Fiori",
+    "issue_type": "Configuration",
+    "summary": "Setting Default Values for Cost Center",
+    "description": "Fields in transactional apps are not auto-filling. Need to configure default Controlling Area and Cost Center.",
+    "status": "Open",
+    "priority": "Medium"
+  },
+  {
+    "id": "SAP-107",
+    "project": "SAP Fiori",
+    "issue_type": "Question",
+    "summary": "How to add an app using App Finder?",
+    "description": "User needs to find an analytical app that is not on their home screen and pin it to a custom tile group.",
+    "status": "Closed",
+    "priority": "Low"
+  },
+  {
+    "id": "SAP-108",
+    "project": "SAP Fiori",
+    "issue_type": "Bug",
+    "summary": "Analytical Drill-Down failing",
+    "description": "Clicking on the KPI chart to drill down into line items results in an authorization error.",
+    "status": "Open",
+    "priority": "High"
+  },
+  {
+    "id": "SAP-109",
+    "project": "SAP Fiori",
+    "issue_type": "Task",
+    "summary": "Upload General Journal Entries via Excel",
+    "description": "User needs the standard Excel template to upload 500 journal entries through the Fiori app.",
+    "status": "In Progress",
+    "priority": "Medium"
+  },
+  {
+    "id": "SAP-110",
+    "project": "SAP Fiori",
+    "issue_type": "Question",
+    "summary": "Accessing Launchpad direct URL",
+    "description": "User is using the SAP GUI transaction /N/UI2/FLP but wants to know the direct web URL for browser access.",
+    "status": "Closed",
+    "priority": "Low"
+  },
+  {
+    "id": "CRM-201",
+    "project": "Salesforce CRM",
+    "issue_type": "Bug",
+    "summary": "Missing Confirmation Email for Trial Setup",
+    "description": "User signed up for a 30-day trial but has not received the setup link in their main inbox or spam/promotions folder.",
+    "status": "Open",
+    "priority": "High"
+  },
+  {
+    "id": "CRM-202",
+    "project": "Salesforce CRM",
+    "issue_type": "Bug",
+    "summary": "Login failure: Invalid Organization ID",
+    "description": "User cannot log in because they do not know how to locate their Org ID for account verification.",
+    "status": "Open",
+    "priority": "High"
+  },
+  {
+    "id": "CRM-203",
+    "project": "Salesforce CRM",
+    "issue_type": "Configuration",
+    "summary": "Missing Dashboard Widgets",
+    "description": "Sales manager is unable to see the active deals and campaign performance widgets on their Home Dashboard.",
+    "status": "In Progress",
+    "priority": "Medium"
+  },
+  {
+    "id": "CRM-204",
+    "project": "Salesforce CRM",
+    "issue_type": "Question",
+    "summary": "How to move deals in Visual Pipeline?",
+    "description": "User needs instructions on how to drag and drop 'Opportunities' to the next closing stage.",
+    "status": "Closed",
+    "priority": "Low"
+  },
+  {
+    "id": "CRM-205",
+    "project": "Salesforce CRM",
+    "issue_type": "Task",
+    "summary": "Syncing Emails to Opportunity Record",
+    "description": "Need to enable activity logging to automatically sync customer emails into the lead timeline.",
+    "status": "Open",
+    "priority": "Medium"
+  },
+  {
+    "id": "CRM-206",
+    "project": "Salesforce CRM",
+    "issue_type": "Bug",
+    "summary": "Einstein GPT not generating subject lines",
+    "description": "The AI assistant is failing to draft follow-up emails based on recent meeting notes inside the Opportunity.",
+    "status": "Open",
+    "priority": "High"
+  },
+  {
+    "id": "CRM-207",
+    "project": "Salesforce CRM",
+    "issue_type": "Question",
+    "summary": "Predictive Revenue Forecast discrepancies",
+    "description": "The AI-adjusted revenue estimates differ significantly from manual sales rep estimates for Q3.",
+    "status": "In Progress",
+    "priority": "Medium"
+  },
+  {
+    "id": "CRM-208",
+    "project": "Salesforce CRM",
+    "issue_type": "Bug",
+    "summary": "Customer 360 missing social media data",
+    "description": "The contact record view is not pulling in recent engagement from the linked corporate LinkedIn account.",
+    "status": "Open",
+    "priority": "Medium"
+  },
+  {
+    "id": "CRM-209",
+    "project": "Salesforce CRM",
+    "issue_type": "Configuration",
+    "summary": "Journey Builder logic error",
+    "description": "The automated SMS campaign is sending messages to contacts who already replied to the previous email step.",
+    "status": "Open",
+    "priority": "High"
+  },
+  {
+    "id": "CRM-210",
+    "project": "Salesforce CRM",
+    "issue_type": "Question",
+    "summary": "How to filter Interactive Reporting by Region?",
+    "description": "Marketing lead needs to customize the dashboard view to only show ROI metrics for the EMEA team.",
+    "status": "Closed",
+    "priority": "Low"
+  }
+]

@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+llama-index
+llama-index-llms-gemini
+llama-index-embeddings-gemini
+llama-index-vector-stores-pinecone
+pinecone-client
+python-dotenv
