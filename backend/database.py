@@ -8,11 +8,14 @@ from dotenv import load_dotenv, find_dotenv
 
 load_dotenv(find_dotenv())
 
-# Initialize Pinecone
-pc = Pinecone(api_key=os.environ["PINECONE_API_KEY"])
+# Initialize Pinecone safely for Vercel builders
+pinecone_key = os.environ.get("PINECONE_API_KEY", "")
+google_key = os.environ.get("GOOGLE_API_KEY", "")
+
+pc = Pinecone(api_key=pinecone_key) if pinecone_key else None
 index_name = "golivebuddy"
 
-if index_name not in pc.list_indexes().names():
+if pc and index_name not in pc.list_indexes().names():
     pc.create_index(
         name=index_name,
         dimension=3072, # Gemini embeddings dimension
@@ -20,11 +23,14 @@ if index_name not in pc.list_indexes().names():
         spec=ServerlessSpec(cloud="aws", region="us-east-1")
     )
 
-pinecone_index = pc.Index(index_name)
+pinecone_index = pc.Index(index_name) if pc else None
 
 def get_vector_store(namespace: str):
+    if not pinecone_index:
+        raise ValueError("Pinecone index not initialized. Missing API Keys.")
     return PineconeVectorStore(pinecone_index=pinecone_index, namespace=namespace)
 
 # Configure LlamaIndex defaults globally
-Settings.llm = Gemini(model="models/gemini-2.5-flash", api_key=os.environ["GOOGLE_API_KEY"])
-Settings.embed_model = GeminiEmbedding(model_name="models/gemini-embedding-001", api_key=os.environ["GOOGLE_API_KEY"])
+if google_key:
+    Settings.llm = Gemini(model="models/gemini-2.5-flash", api_key=google_key)
+    Settings.embed_model = GeminiEmbedding(model_name="models/gemini-embedding-001", api_key=google_key)
