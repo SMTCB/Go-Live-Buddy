@@ -1,6 +1,6 @@
 import json
 import os
-from ingest import process_ingestion
+from ingest import process_ingestion, ingest_json
 
 def generate_mock_jira():
     tickets = []
@@ -24,6 +24,10 @@ def generate_mock_jira():
     with open("mock_jira.json", "w") as f:
         json.dump(tickets, f, indent=4)
     print("Generated mock_jira.json with 20 tickets.")
+    
+    print("Ingesting mock_jira files...")
+    ingest_json("mock_jira.json", "sap-pack")
+    ingest_json("mock_jira.json", "crm-pack")
 
 def auto_ingest_initial():
     print("Starting auto-ingestion of initial content...")

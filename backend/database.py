@@ -15,7 +15,7 @@ index_name = "golivebuddy"
 if index_name not in pc.list_indexes().names():
     pc.create_index(
         name=index_name,
-        dimension=768, # Gemini embeddings dimension
+        dimension=3072, # Gemini embeddings dimension
         metric="cosine",
         spec=ServerlessSpec(cloud="aws", region="us-east-1")
     )
@@ -26,5 +26,5 @@ def get_vector_store(namespace: str):
     return PineconeVectorStore(pinecone_index=pinecone_index, namespace=namespace)
 
 # Configure LlamaIndex defaults globally
-Settings.llm = Gemini(model="models/gemini-1.5-pro-latest", api_key=os.environ["GOOGLE_API_KEY"])
-Settings.embed_model = GeminiEmbedding(model_name="models/embedding-001", api_key=os.environ["GOOGLE_API_KEY"])
+Settings.llm = Gemini(model="models/gemini-2.5-flash", api_key=os.environ["GOOGLE_API_KEY"])
+Settings.embed_model = GeminiEmbedding(model_name="models/gemini-embedding-001", api_key=os.environ["GOOGLE_API_KEY"])
