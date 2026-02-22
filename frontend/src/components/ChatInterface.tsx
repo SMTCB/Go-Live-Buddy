@@ -1,158 +1,118 @@
 'use client';
-import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useState, useEffect, useRef } from 'react';
 import { useDropzone } from 'react-dropzone';
-import { ImagePlus, X, Plus, MessageSquare, ChevronLeft } from 'lucide-react';
+import { ImagePlus, X, Plus, MessageSquare, ChevronLeft, BookOpen } from 'lucide-react';
 
-type Message = { id: string; role: 'user' | 'assistant'; content: string; image?: string };
+type SourceNode = { text: string; score: number; metadata: Record<string, string | number> };
+type Message = {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  image?: string;
+  sources?: SourceNode[];
+};
 type ChatSession = { id: string; title: string; messages: Message[]; createdAt: number };
 
-const STORAGE_KEY = 'golivbuddy_sessions';
+const STORAGE_KEY = 'golivebuddy_sessions';
+const SOURCE_MARKER_START = '__SOURCES__';
+const SOURCE_MARKER_END = '__END_SOURCES__';
 
 function loadSessions(): ChatSession[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch { return []; }
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); } catch { return []; }
 }
-
-function saveSessions(sessions: ChatSession[]) {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(sessions)); } catch { }
+function saveSessions(s: ChatSession[]) {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(s)); } catch { }
 }
-
-function newSessionId() { return `sess_${Date.now()}`; }
+function newId() { return `sess_${Date.now()}`; }
 
 export default function ChatInterface() {
   const [sessions, setSessions] = useState<ChatSession[]>([]);
-  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const [activeId, setActiveId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
-  const [image, setImage] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
-  const [visualProof, setVisualProof] = useState<string | null>(null);
   const [isSending, setIsSending] = useState(false);
   const [techCategory, setTechCategory] = useState('sap-pack');
-  const [isVisualProofOpen, setIsVisualProofOpen] = useState(false);
+  const [panelSources, setPanelSources] = useState<SourceNode[] | null>(null);
+  const [isPanelOpen, setIsPanelOpen] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Load sessions from localStorage on mount
+  // Boot: load saved sessions
   useEffect(() => {
     const loaded = loadSessions();
     setSessions(loaded);
-    // Auto-select most recent session or create one
     if (loaded.length > 0) {
-      const latest = loaded[loaded.length - 1];
-      setActiveSessionId(latest.id);
-      setMessages(latest.messages);
+      const last = loaded[loaded.length - 1];
+      setActiveId(last.id);
+      setMessages(last.messages);
     } else {
-      startNewChat(loaded);
+      createSession(loaded);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Auto-scroll to bottom whenever messages change
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
 
-  // Sync current messages into the active session and persist
+  // Persist messages whenever they change
   useEffect(() => {
-    if (!activeSessionId) return;
+    if (!activeId) return;
     setSessions(prev => {
-      const updated = prev.map(s =>
-        s.id === activeSessionId ? { ...s, messages } : s
-      );
+      const updated = prev.map(s => s.id === activeId ? { ...s, messages } : s);
       saveSessions(updated);
       return updated;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages]);
 
-  // Open visual proof when SAP/CRM keywords appear
-  useEffect(() => {
-    const userMessages = messages.filter(m => m.role === 'user');
-    if (userMessages.length > 0) {
-      const lastUserMsg = userMessages[userMessages.length - 1];
-      if (typeof lastUserMsg?.content === 'string') {
-        const text = lastUserMsg.content.toLowerCase();
-        if (text.includes('fiori') || text.includes('sap')) {
-          // Reliable picsum seed: 100 = tech dashboard style
-          setVisualProof('https://picsum.photos/seed/sap-fiori/600/400');
-          setIsVisualProofOpen(true);
-        } else if (text.includes('crm') || text.includes('lead')) {
-          setVisualProof('https://picsum.photos/seed/crm-sales/600/400');
-          setIsVisualProofOpen(true);
-        } else {
-          setVisualProof('https://picsum.photos/seed/golivebuddy/600/400');
-          setIsVisualProofOpen(true);
-        }
-      }
-    }
-  }, [messages]);
-
-  function startNewChat(currentSessions?: ChatSession[]) {
-    const base = currentSessions ?? sessions;
-    const id = newSessionId();
-    const session: ChatSession = {
-      id,
-      title: 'New Chat',
-      messages: [],
-      createdAt: Date.now(),
-    };
-    const updated = [...base, session];
+  function createSession(base?: ChatSession[]) {
+    const list = base ?? sessions;
+    const id = newId();
+    const sess: ChatSession = { id, title: 'New Chat', messages: [], createdAt: Date.now() };
+    const updated = [...list, sess];
     setSessions(updated);
     saveSessions(updated);
-    setActiveSessionId(id);
+    setActiveId(id);
     setMessages([]);
     setInput('');
-    setImage(null);
     setImagePreview(null);
-    setVisualProof(null);
-    setIsVisualProofOpen(false);
+    setPanelSources(null);
+    setIsPanelOpen(false);
   }
 
   function selectSession(id: string) {
-    const sess = sessions.find(s => s.id === id);
-    if (!sess) return;
-    setActiveSessionId(id);
-    setMessages(sess.messages);
-    setVisualProof(null);
-    setIsVisualProofOpen(false);
+    const s = sessions.find(s => s.id === id);
+    if (!s) return;
+    setActiveId(id);
+    setMessages(s.messages);
+    setPanelSources(null);
+    setIsPanelOpen(false);
   }
 
   function deleteSession(id: string) {
     const updated = sessions.filter(s => s.id !== id);
     saveSessions(updated);
     setSessions(updated);
-    if (activeSessionId === id) {
+    if (activeId === id) {
       if (updated.length > 0) {
         const last = updated[updated.length - 1];
-        setActiveSessionId(last.id);
+        setActiveId(last.id);
         setMessages(last.messages);
       } else {
-        startNewChat(updated);
+        createSession(updated);
       }
     }
   }
 
-  const onDrop = (acceptedFiles: File[]) => {
-    if (acceptedFiles.length > 0) {
-      const file = acceptedFiles[0];
-      setImage(file);
-      const reader = new FileReader();
-      reader.onloadend = () => { setImagePreview(reader.result as string); };
-      reader.readAsDataURL(file);
-    }
+  const onDrop = (files: File[]) => {
+    if (!files[0]) return;
+    const reader = new FileReader();
+    reader.onloadend = () => setImagePreview(reader.result as string);
+    reader.readAsDataURL(files[0]);
   };
-
-  const { getRootProps, getInputProps } = useDropzone({
-    onDrop,
-    accept: { 'image/*': [] },
-    maxFiles: 1,
-  });
+  const { getRootProps, getInputProps } = useDropzone({ onDrop, accept: { 'image/*': [] }, maxFiles: 1 });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -161,25 +121,24 @@ export default function ChatInterface() {
     const currentInput = input;
     const currentImage = imagePreview;
     setInput('');
-    setImage(null);
     setImagePreview(null);
     setIsSending(true);
 
-    const userMessage: Message = {
+    const userMsg: Message = {
       id: Date.now().toString(),
       role: 'user',
       content: currentInput,
-      ...(currentImage && { image: currentImage })
+      ...(currentImage && { image: currentImage }),
     };
-    const newMessages = [...messages, userMessage];
+    const newMessages = [...messages, userMsg];
     setMessages(newMessages);
 
-    // Update session title from first user message
+    // Name session from first user message
     if (messages.length === 0 && currentInput.trim()) {
       setSessions(prev => {
         const updated = prev.map(s =>
-          s.id === activeSessionId
-            ? { ...s, title: currentInput.slice(0, 40) + (currentInput.length > 40 ? '…' : '') }
+          s.id === activeId
+            ? { ...s, title: currentInput.slice(0, 45) + (currentInput.length > 45 ? '…' : '') }
             : s
         );
         saveSessions(updated);
@@ -188,37 +147,73 @@ export default function ChatInterface() {
     }
 
     const assistantId = (Date.now() + 1).toString();
-    setMessages((prev) => [...prev, { id: assistantId, role: 'assistant', content: '' }]);
+    setMessages(prev => [...prev, { id: assistantId, role: 'assistant', content: '' }]);
 
     try {
       const endpoint = currentImage ? '/api/analyze_image' : '/api/chat';
-      const bodyPayload = currentImage
+      const body = currentImage
         ? { messages: newMessages, namespace: techCategory, image: currentImage }
         : { messages: newMessages, namespace: techCategory };
 
-      const response = await fetch(endpoint, {
+      const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(bodyPayload),
+        body: JSON.stringify(body),
       });
+      if (!res.ok) throw new Error('API failed');
 
-      if (!response.ok) throw new Error('API Request Failed');
-
-      const reader = response.body?.getReader();
+      const reader = res.body?.getReader();
       const decoder = new TextDecoder();
+      let buffer = '';
 
       if (reader) {
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
-          const chunk = decoder.decode(value, { stream: true });
-          setMessages((prev) =>
-            prev.map((m) => (m.id === assistantId ? { ...m, content: m.content + chunk } : m))
+          buffer += decoder.decode(value, { stream: true });
+
+          // Check if the buffer contains the sources marker
+          const startIdx = buffer.indexOf(SOURCE_MARKER_START);
+          if (startIdx !== -1) {
+            const endIdx = buffer.indexOf(SOURCE_MARKER_END, startIdx);
+            if (endIdx !== -1) {
+              // We have the full sources block — extract it
+              const textPart = buffer.slice(0, startIdx);
+              const jsonStr = buffer.slice(startIdx + SOURCE_MARKER_START.length, endIdx);
+              buffer = buffer.slice(endIdx + SOURCE_MARKER_END.length);
+
+              try {
+                const sourcesData: SourceNode[] = JSON.parse(jsonStr);
+                // Attach sources to the assistant message
+                setMessages(prev =>
+                  prev.map(m => m.id === assistantId
+                    ? { ...m, content: m.content + textPart, sources: sourcesData }
+                    : m)
+                );
+                continue;
+              } catch { /* parse failed, treat as normal text */ }
+            }
+          }
+
+          // Normal text chunk — render immediately
+          if (!buffer.includes(SOURCE_MARKER_START)) {
+            const chunk = buffer;
+            buffer = '';
+            setMessages(prev =>
+              prev.map(m => m.id === assistantId ? { ...m, content: m.content + chunk } : m)
+            );
+          }
+        }
+
+        // Flush any remaining buffer (shouldn't normally happen)
+        if (buffer && !buffer.includes(SOURCE_MARKER_START)) {
+          setMessages(prev =>
+            prev.map(m => m.id === assistantId ? { ...m, content: m.content + buffer } : m)
           );
         }
       }
     } catch (err) {
-      console.error('Submit error:', err);
+      console.error(err);
       setInput(currentInput);
       if (currentImage) setImagePreview(currentImage);
     } finally {
@@ -226,89 +221,66 @@ export default function ChatInterface() {
     }
   };
 
-  const activeSession = sessions.find(s => s.id === activeSessionId);
+  function openSources(sources: SourceNode[]) {
+    setPanelSources(sources);
+    setIsPanelOpen(true);
+  }
+
+  const activeSession = sessions.find(s => s.id === activeId);
 
   return (
     <div className="flex h-screen w-full bg-background overflow-hidden font-sans">
 
-      {/* ─── Left Sidebar: Chat History ─── */}
-      <aside
-        className={`flex flex-col shrink-0 bg-[#F7F5FF] border-r border-primary/10 transition-all duration-300 overflow-hidden ${isSidebarOpen ? 'w-64' : 'w-0'
-          }`}
-      >
+      {/* ── Sidebar ── */}
+      <aside className={`flex flex-col shrink-0 bg-[#F7F5FF] border-r border-primary/10 transition-all duration-300 overflow-hidden ${isSidebarOpen ? 'w-64' : 'w-0'}`}>
         <div className="flex items-center justify-between px-4 py-5 border-b border-primary/10">
-          <span className="text-sm font-bold text-primary tracking-wide uppercase">Chat History</span>
-          <button
-            onClick={() => startNewChat()}
-            title="New Chat"
-            className="flex items-center gap-1 bg-primary text-primary-foreground rounded-full px-3 py-1.5 text-xs font-semibold hover:bg-primary/90 transition-colors"
-          >
+          <span className="text-xs font-bold text-primary tracking-widest uppercase">Chat History</span>
+          <button onClick={() => createSession()} className="flex items-center gap-1 bg-primary text-primary-foreground rounded-full px-3 py-1.5 text-xs font-semibold hover:bg-primary/90 transition-colors">
             <Plus size={12} /> New
           </button>
         </div>
         <div className="flex-1 overflow-y-auto py-2">
-          {sessions.length === 0 && (
-            <p className="text-xs text-muted-foreground px-4 py-6 text-center">No chats yet. Start one!</p>
-          )}
+          {sessions.length === 0 && <p className="text-xs text-muted-foreground px-4 py-6 text-center">No chats yet.</p>}
           {[...sessions].reverse().map(sess => (
             <div
               key={sess.id}
               onClick={() => selectSession(sess.id)}
-              className={`group flex items-center gap-2 px-4 py-3 cursor-pointer rounded-lg mx-2 mb-1 transition-colors ${sess.id === activeSessionId
-                ? 'bg-primary/10 text-primary'
-                : 'hover:bg-primary/5 text-foreground'
-                }`}
+              className={`group flex items-center gap-2 px-3 py-2.5 cursor-pointer rounded-lg mx-2 mb-1 transition-colors text-sm ${sess.id === activeId ? 'bg-primary/10 text-primary font-medium' : 'hover:bg-primary/5 text-foreground'}`}
             >
-              <MessageSquare size={14} className="shrink-0 opacity-60" />
-              <span className="flex-1 text-sm truncate">{sess.title}</span>
+              <MessageSquare size={13} className="shrink-0 opacity-50" />
+              <span className="flex-1 truncate">{sess.title}</span>
               <button
                 onClick={e => { e.stopPropagation(); deleteSession(sess.id); }}
-                className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
-                title="Delete"
-              >
-                <X size={12} />
-              </button>
+                className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-opacity"
+              ><X size={12} /></button>
             </div>
           ))}
         </div>
       </aside>
 
-      {/* ─── Main Chat Area ─── */}
+      {/* ── Main ── */}
       <div className="flex-1 flex flex-col h-full min-w-0 overflow-hidden">
 
         {/* Header */}
         <header className="shrink-0 flex items-center justify-between px-6 py-4 border-b bg-background/95 backdrop-blur">
           <div className="flex items-center gap-3">
-            <button
-              onClick={() => setIsSidebarOpen(o => !o)}
-              className="text-primary/60 hover:text-primary transition-colors p-1.5 rounded-md hover:bg-primary/5"
-              title="Toggle sidebar"
-            >
+            <button onClick={() => setIsSidebarOpen(o => !o)} className="text-primary/50 hover:text-primary p-1.5 rounded-md hover:bg-primary/5 transition-colors">
               <ChevronLeft size={20} className={`transition-transform duration-300 ${isSidebarOpen ? '' : 'rotate-180'}`} />
             </button>
             <div>
               <h1 className="text-2xl font-extrabold text-primary tracking-tight leading-none">Go-Live Buddy</h1>
-              <p className="text-muted-foreground text-xs mt-0.5">
-                {activeSession?.title && activeSession.title !== 'New Chat' ? activeSession.title : 'Premium Multi-Tech AI Knowledge Portal'}
-              </p>
+              <p className="text-muted-foreground text-xs mt-0.5">{activeSession?.title !== 'New Chat' ? activeSession?.title : 'Premium Multi-Tech AI Knowledge Portal'}</p>
             </div>
           </div>
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2 bg-card px-4 py-2 border rounded-full shadow-sm">
               <span className="text-sm font-semibold text-foreground">Viewing:</span>
-              <select
-                value={techCategory}
-                onChange={(e) => setTechCategory(e.target.value)}
-                className="bg-transparent border-none text-sm font-bold text-primary focus:outline-none cursor-pointer"
-              >
+              <select value={techCategory} onChange={e => setTechCategory(e.target.value)} className="bg-transparent border-none text-sm font-bold text-primary focus:outline-none cursor-pointer">
                 <option value="sap-pack">SAP FI</option>
                 <option value="crm-pack">Salesforce CRM</option>
               </select>
             </div>
-            <button
-              onClick={() => startNewChat()}
-              className="flex items-center gap-1.5 bg-primary text-primary-foreground rounded-full px-4 py-2 text-sm font-semibold hover:bg-primary/90 transition-colors shadow-sm"
-            >
+            <button onClick={() => createSession()} className="flex items-center gap-1.5 bg-primary text-primary-foreground rounded-full px-4 py-2 text-sm font-semibold hover:bg-primary/90 transition-colors shadow-sm">
               <Plus size={14} /> New Chat
             </button>
           </div>
@@ -320,40 +292,38 @@ export default function ChatInterface() {
             {messages.length === 0 && (
               <div className="text-center text-muted-foreground mt-32 flex flex-col items-center">
                 <div className="w-16 h-16 bg-primary/10 text-primary rounded-full flex items-center justify-center mb-4 text-2xl">🤖</div>
-                <p className="text-lg">Ask me about {techCategory === 'sap-pack' ? 'SAP Fiori' : 'Salesforce CRM'}!</p>
+                <p className="text-lg font-medium">Ask me about {techCategory === 'sap-pack' ? 'SAP Fiori' : 'Salesforce CRM'}!</p>
+                <p className="text-sm mt-2 text-muted-foreground/70">
+                  {techCategory === 'sap-pack'
+                    ? 'Try: "How do I change the theme in SAP Fiori Launchpad?"'
+                    : 'Try: "How do I convert a lead in Salesforce?"'}
+                </p>
               </div>
             )}
-            {messages.map((m) => (
+            {messages.map(m => (
               <div key={m.id} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                <div
-                  className={`px-5 py-4 rounded-2xl max-w-[85%] shadow-sm ${m.role === 'user'
-                    ? 'bg-primary text-primary-foreground rounded-br-sm'
-                    : 'bg-[#F1F1EF] text-[#000000] border border-[#CFCFCF] rounded-bl-sm'
-                    }`}
+                <div className={`px-5 py-4 rounded-2xl max-w-[85%] shadow-sm ${m.role === 'user'
+                  ? 'bg-primary text-primary-foreground rounded-br-sm'
+                  : 'bg-[#F1F1EF] text-[#000000] border border-[#CFCFCF] rounded-bl-sm'}`}
                 >
                   {m.image && (
                     <div className="mb-3 p-2 bg-black/10 rounded-lg inline-block">
-                      <div className="text-xs font-bold mb-2 flex items-center gap-1 uppercase tracking-wider text-primary-foreground/90">
-                        <span>👁️</span> Vision Analysis
-                      </div>
+                      <div className="text-xs font-bold mb-2 flex items-center gap-1 uppercase tracking-wider opacity-90"><span>👁️</span> Vision Analysis</div>
                       <img src={m.image} alt="User upload" className="max-w-[240px] rounded border shadow-sm" />
                     </div>
                   )}
-                  <p className="whitespace-pre-wrap leading-relaxed">
+                  <p className="whitespace-pre-wrap leading-relaxed text-sm">
                     {typeof m.content === 'string' ? m.content : JSON.stringify(m.content)}
                   </p>
-                  {m.role === 'assistant' && m.content.length > 50 && (
+                  {/* Only show View Source if we have real matched sources */}
+                  {m.role === 'assistant' && m.sources && m.sources.length > 0 && (
                     <div className="mt-3 pt-3 border-t border-[#CFCFCF] flex justify-end">
                       <button
-                        onClick={() => {
-                          if (!visualProof) {
-                            setVisualProof('https://picsum.photos/seed/golivebuddy/600/400');
-                          }
-                          setIsVisualProofOpen(true);
-                        }}
-                        className="text-xs font-semibold text-primary hover:underline flex items-center gap-1"
+                        onClick={() => openSources(m.sources!)}
+                        className="text-xs font-semibold text-primary hover:underline flex items-center gap-1.5"
                       >
-                        <span>📄</span> View Source
+                        <BookOpen size={12} />
+                        View Source ({m.sources.length} match{m.sources.length > 1 ? 'es' : ''})
                       </button>
                     </div>
                   )}
@@ -369,39 +339,30 @@ export default function ChatInterface() {
                 </div>
               </div>
             )}
-            {/* Scroll anchor */}
             <div ref={messagesEndRef} />
           </div>
         </div>
 
-        {/* Input Form */}
+        {/* Input */}
         <div className="shrink-0 px-6 py-4 border-t bg-background/95 backdrop-blur">
           <form onSubmit={handleSubmit} className="flex flex-col gap-3 max-w-4xl mx-auto">
             {imagePreview && (
               <div className="relative inline-block w-20 h-20 border-2 border-primary/20 rounded-xl overflow-hidden shadow-sm self-start ml-16">
-                <img src={imagePreview} alt="upload preview" className="object-cover w-full h-full" />
-                <button
-                  type="button"
-                  onClick={() => { setImage(null); setImagePreview(null); }}
-                  className="absolute top-1 right-1 bg-black/60 text-white rounded-full p-1 hover:bg-black/80 transition-colors"
-                >
+                <img src={imagePreview} alt="preview" className="object-cover w-full h-full" />
+                <button type="button" onClick={() => setImagePreview(null)} className="absolute top-1 right-1 bg-black/60 text-white rounded-full p-1 hover:bg-black/80">
                   <X size={12} />
                 </button>
               </div>
             )}
             <div className="flex gap-3 items-center">
-              <div
-                {...getRootProps()}
-                className="cursor-pointer p-3 border-2 border-dashed border-primary/30 rounded-full hover:bg-primary/5 hover:border-primary/60 transition-colors flex items-center justify-center h-14 w-14 group shrink-0"
-                title="Upload Screenshot"
-              >
+              <div {...getRootProps()} className="cursor-pointer border-2 border-dashed border-primary/30 rounded-full hover:bg-primary/5 hover:border-primary/60 transition-colors flex items-center justify-center h-14 w-14 shrink-0 group" title="Upload Screenshot">
                 <input {...getInputProps()} />
                 <ImagePlus className="w-6 h-6 text-primary/70 group-hover:text-primary transition-colors" />
               </div>
               <Input
                 value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) handleSubmit(e as unknown as React.FormEvent); }}
+                onChange={e => setInput(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) handleSubmit(e as unknown as React.FormEvent); }}
                 placeholder={imagePreview ? "Add context for the visual audit..." : `Ask a question about ${techCategory === 'sap-pack' ? 'SAP FI' : 'Salesforce CRM'}...`}
                 className="flex-1 shadow-sm h-14 rounded-full px-6 border-2 focus-visible:ring-primary text-base"
               />
@@ -415,42 +376,51 @@ export default function ChatInterface() {
         </div>
       </div>
 
-      {/* ─── Visual Proof Drawer ─── */}
-      <div
-        className={`fixed top-0 right-0 w-96 h-full bg-white border-l shadow-2xl flex flex-col transform transition-transform duration-300 z-50 ${isVisualProofOpen ? 'translate-x-0' : 'translate-x-full'
-          }`}
-      >
+      {/* ── Source Panel ── */}
+      <div className={`fixed top-0 right-0 w-[420px] h-full bg-white border-l shadow-2xl flex flex-col transform transition-transform duration-300 z-50 ${isPanelOpen ? 'translate-x-0' : 'translate-x-full'}`}>
         <div className="flex justify-between items-center px-6 py-5 border-b shrink-0">
-          <h2 className="text-xl font-bold text-foreground flex items-center gap-2">
-            <span className="text-primary">📄</span> Visual Proof
+          <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
+            <BookOpen size={18} className="text-primary" /> Source Citations
           </h2>
-          <button onClick={() => setIsVisualProofOpen(false)} className="text-muted-foreground hover:text-foreground">
-            <X size={20} />
-          </button>
+          <button onClick={() => setIsPanelOpen(false)} className="text-muted-foreground hover:text-foreground"><X size={20} /></button>
         </div>
-        <div className="flex-1 overflow-hidden">
-          {visualProof ? (
-            <div className="w-full h-full relative group">
-              <img src={visualProof} alt="Visual Proof" className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
-              <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-4 text-left">
-                <p className="text-white text-sm font-semibold">Source Citation</p>
-                <p className="text-white/80 text-xs">Extracted frame from matched document.</p>
-              </div>
-            </div>
+        <div className="flex-1 overflow-y-auto p-5 flex flex-col gap-4">
+          {!panelSources || panelSources.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center mt-8">No source citations available for this response.</p>
           ) : (
-            <div className="p-6 text-sm text-muted-foreground">
-              Citations and visual proof will appear here when Go-Live Buddy references documentation.
-            </div>
+            panelSources.map((src, i) => (
+              <div key={i} className="border border-border rounded-xl p-4 bg-[#FAFAFA] flex flex-col gap-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-primary uppercase tracking-wider">
+                    {src.metadata?.type === 'jira_ticket' ? '🎫 JIRA Ticket' : '🎬 Video Frame'}
+                    {src.metadata?.frame_index != null ? ` #${src.metadata.frame_index}` : ''}
+                  </span>
+                  <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${src.score >= 0.7 ? 'bg-green-100 text-green-700' :
+                      src.score >= 0.5 ? 'bg-yellow-100 text-yellow-700' :
+                        'bg-gray-100 text-gray-600'
+                    }`}>
+                    {Math.round(src.score * 100)}% match
+                  </span>
+                </div>
+                <p className="text-sm text-foreground leading-relaxed line-clamp-6">{src.text}</p>
+                {src.metadata?.source && (
+                  <a
+                    href={src.metadata.source as string}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs text-primary/70 hover:text-primary hover:underline truncate"
+                  >
+                    🔗 {src.metadata.source}
+                  </a>
+                )}
+              </div>
+            ))
           )}
         </div>
       </div>
 
-      {/* Backdrop */}
-      {isVisualProofOpen && (
-        <div
-          className="fixed inset-0 bg-black/20 z-40 lg:hidden"
-          onClick={() => setIsVisualProofOpen(false)}
-        />
+      {isPanelOpen && (
+        <div className="fixed inset-0 bg-black/20 z-40 lg:hidden" onClick={() => setIsPanelOpen(false)} />
       )}
     </div>
   );
