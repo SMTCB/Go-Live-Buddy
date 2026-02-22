@@ -8,3 +8,5 @@ pinecone-client
 python-dotenv
 Pillow
 google-generativeai
+requests
+pypdf

@@ -59,11 +59,40 @@ async def analyze_image_endpoint(request: Request):
 
 @app.post("/api/ingest")
 async def ingest_endpoint(req: IngestRequest):
-    if not req.techCategory or not req.contentTier:
-        raise HTTPException(status_code=400, detail="Missing mandatory metadata")
-    
-    success = process_ingestion(req.sourceUrl, req.techCategory, req.contentTier)
-    if not success:
-        raise HTTPException(status_code=500, detail="Ingestion failed")
-        
-    return {"status": "success", "message": "Content successfully ingested"}
+    if not req.techCategory or not req.contentTier or not req.sourceUrl:
+        raise HTTPException(status_code=400, detail="All fields are required")
+
+    import queue, threading
+
+    progress_queue: queue.Queue = queue.Queue()
+
+    def run_ingestion():
+        try:
+            process_ingestion(
+                req.sourceUrl,
+                req.techCategory,
+                req.contentTier,
+                progress_cb=lambda msg: progress_queue.put(msg)
+            )
+        except Exception as e:
+            progress_queue.put(f"❌ Unexpected error: {e}")
+        finally:
+            progress_queue.put(None)  # sentinel — done
+
+    thread = threading.Thread(target=run_ingestion, daemon=True)
+    thread.start()
+
+    async def stream_progress():
+        while True:
+            try:
+                msg = progress_queue.get(timeout=300)
+                if msg is None:
+                    yield "DONE\n"
+                    break
+                yield f"{msg}\n"
+                await asyncio.sleep(0)
+            except queue.Empty:
+                yield "⚠️ Ingestion timed out.\n"
+                break
+
+    return StreamingResponse(stream_progress(), media_type="text/plain")
