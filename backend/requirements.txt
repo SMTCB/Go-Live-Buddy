@@ -6,3 +6,7 @@ llama-index-embeddings-gemini
 llama-index-vector-stores-pinecone
 pinecone-client
 python-dotenv
+Pillow
+google-generativeai
+yt-dlp
+opencv-python-headless
