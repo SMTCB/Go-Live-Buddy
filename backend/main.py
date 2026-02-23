@@ -1,11 +1,14 @@
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, JSONResponse
 from pydantic import BaseModel
 import os
 import sys
+import json
+import random
+from datetime import datetime, timezone
 
-# Crucial for Vercel: Add the current directory to Python path so it can resolve local module imports
+# Crucial for Vercel: Add the current directory to Python path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from dotenv import load_dotenv, find_dotenv
@@ -14,6 +17,22 @@ from agent import query_agent_stream
 from ingest import process_ingestion
 
 load_dotenv(find_dotenv())
+
+_HERE = os.path.dirname(os.path.abspath(__file__))
+TICKETS_FILE = os.path.join(_HERE, "simulated_tickets.json")
+
+def _load_tickets():
+    if not os.path.exists(TICKETS_FILE):
+        return []
+    try:
+        with open(TICKETS_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return []
+
+def _save_tickets(tickets):
+    with open(TICKETS_FILE, "w", encoding="utf-8") as f:
+        json.dump(tickets, f, indent=2, ensure_ascii=False)
 
 app = FastAPI(title="Go-Live Buddy API")
 
@@ -96,3 +115,33 @@ async def ingest_endpoint(req: IngestRequest):
                 break
 
     return StreamingResponse(stream_progress(), media_type="text/plain")
+
+
+class TicketDraftRequest(BaseModel):
+    subject:       str
+    description:   str
+    priority:      str = "Medium"
+    systemContext: str = ""
+    namespace:     str = ""
+
+@app.post("/api/tickets/draft")
+async def draft_ticket(req: TicketDraftRequest):
+    tickets = _load_tickets()
+    ticket_id = f"SAP-MOCK-{random.randint(100, 999)}"
+    entry = {
+        "ticket_id":     ticket_id,
+        "subject":       req.subject,
+        "description":   req.description,
+        "priority":      req.priority,
+        "systemContext": req.systemContext,
+        "namespace":     req.namespace,
+        "createdAt":     datetime.now(timezone.utc).isoformat(),
+        "status":        "Open",
+    }
+    tickets.append(entry)
+    _save_tickets(tickets)
+    return JSONResponse({"ticket_id": ticket_id, "status": "created"})
+
+@app.get("/api/tickets")
+async def list_tickets():
+    return JSONResponse(_load_tickets())
