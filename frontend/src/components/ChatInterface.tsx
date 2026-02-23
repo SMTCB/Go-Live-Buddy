@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useState, useEffect, useRef } from 'react';
 import { useDropzone } from 'react-dropzone';
-import { ImagePlus, X, Plus, MessageSquare, ChevronLeft, BookOpen } from 'lucide-react';
+import { ImagePlus, X, Plus, MessageSquare, ChevronLeft, BookOpen, ChevronDown, ChevronUp } from 'lucide-react';
 
 type SourceNode = { text: string; score: number; metadata: Record<string, string | number> };
 type Message = {
@@ -27,6 +27,151 @@ function saveSessions(s: ChatSession[]) {
 }
 function newId() { return `sess_${Date.now()}`; }
 
+/** Deduplicate sources: keep only 1 node per frame_index (video) and per page_label (PDF). */
+function deduplicateSources(sources: SourceNode[]): SourceNode[] {
+  const seenFrame = new Set<number>();
+  const seenPage = new Set<string>();
+  const seenTicket = new Set<string>();
+  return sources.filter(src => {
+    const type = src.metadata?.type;
+    if (type === 'pdf_document') {
+      const pg = String(src.metadata?.page_label ?? '');
+      if (seenPage.has(pg)) return false;
+      seenPage.add(pg);
+      return true;
+    }
+    if (type === 'jira_ticket') {
+      const tid = String(src.metadata?.ticket_id ?? '');
+      if (seenTicket.has(tid)) return false;
+      seenTicket.add(tid);
+      return true;
+    }
+    // video frame
+    const fi = Number(src.metadata?.frame_index ?? -1);
+    if (fi >= 0 && seenFrame.has(fi)) return false;
+    seenFrame.add(fi);
+    return true;
+  });
+}
+
+// ── Expandable source card ────────────────────────────────────────────────────
+function SourceCard({ src }: { src: SourceNode }) {
+  const [expanded, setExpanded] = useState(false);
+
+  const isVideo = src.metadata?.type !== 'jira_ticket' && src.metadata?.type !== 'pdf_document';
+  const isPdf = src.metadata?.type === 'pdf_document';
+  const isJira = src.metadata?.type === 'jira_ticket';
+
+  const sourceUrl = src.metadata?.source as string | undefined;
+  const frameIndex = src.metadata?.frame_index as number | undefined;
+  const pageLabel = src.metadata?.page_label as string | undefined;
+  const ticketId = src.metadata?.ticket_id as string | undefined;
+  const frameImageUrl = src.metadata?.frame_image_url as string | undefined;
+
+  let videoId: string | null = null;
+  let timestampSec = 0;
+  if (isVideo && sourceUrl) {
+    const m = sourceUrl.match(/(?:v=|youtu\.be\/)([^&?/]+)/);
+    videoId = m ? m[1] : null;
+    timestampSec = (frameIndex ?? 0) * 30;
+  }
+  const videoLink = videoId ? `https://www.youtube.com/watch?v=${videoId}&t=${timestampSec}s` : sourceUrl;
+  const scoreColor = src.score >= 0.7 ? 'bg-green-100 text-green-700' : src.score >= 0.5 ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-600';
+
+  return (
+    <div className="border border-border rounded-xl overflow-hidden bg-[#FAFAFA] flex flex-col">
+
+      {/* ── Visual header ── */}
+      {isVideo && (frameImageUrl || videoId) && (
+        <a href={videoLink ?? '#'} target="_blank" rel="noopener noreferrer" className="relative block group shrink-0">
+          <img
+            src={frameImageUrl ?? `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`}
+            alt={`Frame ${frameIndex}`}
+            className="w-full h-44 object-cover transition-transform duration-300 group-hover:scale-105"
+          />
+          <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+            <span className="text-white text-sm font-bold bg-black/60 px-3 py-1.5 rounded-full">
+              ▶ Jump to {Math.floor(timestampSec / 60)}:{String(timestampSec % 60).padStart(2, '0')}
+            </span>
+          </div>
+          <div className="absolute bottom-2 left-2 bg-black/70 text-white text-xs px-2 py-0.5 rounded-full font-semibold">
+            🎬 Frame {frameIndex ?? '?'} · {Math.floor(timestampSec / 60)}:{String(timestampSec % 60).padStart(2, '0')}
+          </div>
+        </a>
+      )}
+      {isPdf && (
+        <a href={sourceUrl ?? '#'} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 w-full px-5 py-3 bg-blue-50 hover:bg-blue-100 transition-colors shrink-0">
+          <span className="text-2xl shrink-0">📄</span>
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-bold text-blue-800 truncate">{sourceUrl?.split('/').pop() ?? 'Document'}</p>
+            {pageLabel && <p className="text-xs text-blue-600">Page {pageLabel}</p>}
+          </div>
+        </a>
+      )}
+      {isJira && (
+        <div className="flex items-center gap-3 w-full px-5 py-3 bg-amber-50 shrink-0">
+          <span className="text-2xl shrink-0">🎫</span>
+          <div>
+            <p className="text-xs font-bold text-amber-800">{ticketId ?? 'JIRA Ticket'}</p>
+            <p className="text-xs text-amber-600">{src.metadata?.system as string ?? ''}</p>
+          </div>
+        </div>
+      )}
+
+      {/* ── Body ── */}
+      <div className="p-4 flex flex-col gap-2">
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-xs font-bold text-primary uppercase tracking-wider">
+            {isVideo ? '🎬 Video Frame' : isPdf ? '📄 PDF Document' : '🎫 JIRA Ticket'}
+          </span>
+          <div className="flex items-center gap-2">
+            <span className={`text-xs font-semibold px-2 py-0.5 rounded-full shrink-0 ${scoreColor}`}>
+              {Math.round(src.score * 100)}% match
+            </span>
+          </div>
+        </div>
+
+        {/* Source-specific meta line */}
+        {isPdf && pageLabel && (
+          <p className="text-xs font-semibold text-blue-600">📖 Page {pageLabel}</p>
+        )}
+        {isJira && ticketId && (
+          <p className="text-xs font-semibold text-amber-700">🎫 {ticketId}</p>
+        )}
+        {isVideo && frameIndex !== undefined && (
+          <p className="text-xs font-semibold text-purple-600">
+            ⏱ {Math.floor(timestampSec / 60)}:{String(timestampSec % 60).padStart(2, '0')} into video
+          </p>
+        )}
+
+        {/* Text excerpt — expandable */}
+        <p className={`text-xs text-foreground leading-relaxed ${expanded ? '' : 'line-clamp-4'}`}>
+          {src.text}
+        </p>
+        <button
+          onClick={() => setExpanded(e => !e)}
+          className="flex items-center gap-1 text-xs text-primary/70 hover:text-primary transition-colors self-start"
+        >
+          {expanded ? <><ChevronUp size={12} /> Show less</> : <><ChevronDown size={12} /> Read more</>}
+        </button>
+
+        {/* Link */}
+        {isVideo && videoLink && (
+          <a href={videoLink} target="_blank" rel="noopener noreferrer" className="text-xs text-primary/70 hover:text-primary hover:underline truncate">
+            🔗 Watch at {Math.floor(timestampSec / 60)}:{String(timestampSec % 60).padStart(2, '0')}
+          </a>
+        )}
+        {isPdf && sourceUrl && (
+          <a href={sourceUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-primary/70 hover:text-primary hover:underline truncate">
+            🔗 {sourceUrl}
+          </a>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Main component ─────────────────────────────────────────────────────────────
 export default function ChatInterface() {
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -40,7 +185,6 @@ export default function ChatInterface() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Boot: load saved sessions
   useEffect(() => {
     const loaded = loadSessions();
     setSessions(loaded);
@@ -56,7 +200,6 @@ export default function ChatInterface() {
 
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
 
-  // Persist messages whenever they change
   useEffect(() => {
     if (!activeId) return;
     setSessions(prev => {
@@ -125,22 +268,16 @@ export default function ChatInterface() {
     setIsSending(true);
 
     const userMsg: Message = {
-      id: Date.now().toString(),
-      role: 'user',
-      content: currentInput,
+      id: Date.now().toString(), role: 'user', content: currentInput,
       ...(currentImage && { image: currentImage }),
     };
     const newMessages = [...messages, userMsg];
     setMessages(newMessages);
 
-    // Name session from first user message
     if (messages.length === 0 && currentInput.trim()) {
       setSessions(prev => {
-        const updated = prev.map(s =>
-          s.id === activeId
-            ? { ...s, title: currentInput.slice(0, 45) + (currentInput.length > 45 ? '…' : '') }
-            : s
-        );
+        const updated = prev.map(s => s.id === activeId
+          ? { ...s, title: currentInput.slice(0, 45) + (currentInput.length > 45 ? '…' : '') } : s);
         saveSessions(updated);
         return updated;
       });
@@ -155,11 +292,7 @@ export default function ChatInterface() {
         ? { messages: newMessages, namespace: techCategory, image: currentImage }
         : { messages: newMessages, namespace: techCategory };
 
-      const res = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
+      const res = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       if (!res.ok) throw new Error('API failed');
 
       const reader = res.body?.getReader();
@@ -172,44 +305,29 @@ export default function ChatInterface() {
           if (done) break;
           buffer += decoder.decode(value, { stream: true });
 
-          // Check if the buffer contains the sources marker
           const startIdx = buffer.indexOf(SOURCE_MARKER_START);
           if (startIdx !== -1) {
             const endIdx = buffer.indexOf(SOURCE_MARKER_END, startIdx);
             if (endIdx !== -1) {
-              // We have the full sources block — extract it
               const textPart = buffer.slice(0, startIdx);
               const jsonStr = buffer.slice(startIdx + SOURCE_MARKER_START.length, endIdx);
               buffer = buffer.slice(endIdx + SOURCE_MARKER_END.length);
-
               try {
-                const sourcesData: SourceNode[] = JSON.parse(jsonStr);
-                // Attach sources to the assistant message
-                setMessages(prev =>
-                  prev.map(m => m.id === assistantId
-                    ? { ...m, content: m.content + textPart, sources: sourcesData }
-                    : m)
-                );
+                const raw: SourceNode[] = JSON.parse(jsonStr);
+                const deduped = deduplicateSources(raw);
+                setMessages(prev => prev.map(m => m.id === assistantId
+                  ? { ...m, content: m.content + textPart, sources: deduped } : m));
                 continue;
-              } catch { /* parse failed, treat as normal text */ }
+              } catch { /* fall through */ }
             }
           }
-
-          // Normal text chunk — render immediately
           if (!buffer.includes(SOURCE_MARKER_START)) {
-            const chunk = buffer;
-            buffer = '';
-            setMessages(prev =>
-              prev.map(m => m.id === assistantId ? { ...m, content: m.content + chunk } : m)
-            );
+            const chunk = buffer; buffer = '';
+            setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, content: m.content + chunk } : m));
           }
         }
-
-        // Flush any remaining buffer (shouldn't normally happen)
         if (buffer && !buffer.includes(SOURCE_MARKER_START)) {
-          setMessages(prev =>
-            prev.map(m => m.id === assistantId ? { ...m, content: m.content + buffer } : m)
-          );
+          setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, content: m.content + buffer } : m));
         }
       }
     } catch (err) {
@@ -242,17 +360,12 @@ export default function ChatInterface() {
         <div className="flex-1 overflow-y-auto py-2">
           {sessions.length === 0 && <p className="text-xs text-muted-foreground px-4 py-6 text-center">No chats yet.</p>}
           {[...sessions].reverse().map(sess => (
-            <div
-              key={sess.id}
-              onClick={() => selectSession(sess.id)}
-              className={`group flex items-center gap-2 px-3 py-2.5 cursor-pointer rounded-lg mx-2 mb-1 transition-colors text-sm ${sess.id === activeId ? 'bg-primary/10 text-primary font-medium' : 'hover:bg-primary/5 text-foreground'}`}
-            >
+            <div key={sess.id} onClick={() => selectSession(sess.id)}
+              className={`group flex items-center gap-2 px-3 py-2.5 cursor-pointer rounded-lg mx-2 mb-1 transition-colors text-sm ${sess.id === activeId ? 'bg-primary/10 text-primary font-medium' : 'hover:bg-primary/5 text-foreground'}`}>
               <MessageSquare size={13} className="shrink-0 opacity-50" />
               <span className="flex-1 truncate">{sess.title}</span>
-              <button
-                onClick={e => { e.stopPropagation(); deleteSession(sess.id); }}
-                className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-opacity"
-              ><X size={12} /></button>
+              <button onClick={e => { e.stopPropagation(); deleteSession(sess.id); }}
+                className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-opacity"><X size={12} /></button>
             </div>
           ))}
         </div>
@@ -260,8 +373,6 @@ export default function ChatInterface() {
 
       {/* ── Main ── */}
       <div className="flex-1 flex flex-col h-full min-w-0 overflow-hidden">
-
-        {/* Header */}
         <header className="shrink-0 flex items-center justify-between px-6 py-4 border-b bg-background/95 backdrop-blur">
           <div className="flex items-center gap-3">
             <button onClick={() => setIsSidebarOpen(o => !o)} className="text-primary/50 hover:text-primary p-1.5 rounded-md hover:bg-primary/5 transition-colors">
@@ -286,7 +397,6 @@ export default function ChatInterface() {
           </div>
         </header>
 
-        {/* Messages */}
         <div className="flex-1 overflow-y-auto px-6 py-6">
           <div className="flex flex-col gap-6 max-w-4xl mx-auto pb-4">
             {messages.length === 0 && (
@@ -294,9 +404,7 @@ export default function ChatInterface() {
                 <div className="w-16 h-16 bg-primary/10 text-primary rounded-full flex items-center justify-center mb-4 text-2xl">🤖</div>
                 <p className="text-lg font-medium">Ask me about {techCategory === 'sap-pack' ? 'SAP Fiori' : 'Salesforce CRM'}!</p>
                 <p className="text-sm mt-2 text-muted-foreground/70">
-                  {techCategory === 'sap-pack'
-                    ? 'Try: "How do I change the theme in SAP Fiori Launchpad?"'
-                    : 'Try: "How do I convert a lead in Salesforce?"'}
+                  {techCategory === 'sap-pack' ? 'Try: "What are the steps for period-end closing in SAP FI?"' : 'Try: "How do I convert a lead in Salesforce?"'}
                 </p>
               </div>
             )}
@@ -304,8 +412,7 @@ export default function ChatInterface() {
               <div key={m.id} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                 <div className={`px-5 py-4 rounded-2xl max-w-[85%] shadow-sm ${m.role === 'user'
                   ? 'bg-primary text-primary-foreground rounded-br-sm'
-                  : 'bg-[#F1F1EF] text-[#000000] border border-[#CFCFCF] rounded-bl-sm'}`}
-                >
+                  : 'bg-[#F1F1EF] text-[#000000] border border-[#CFCFCF] rounded-bl-sm'}`}>
                   {m.image && (
                     <div className="mb-3 p-2 bg-black/10 rounded-lg inline-block">
                       <div className="text-xs font-bold mb-2 flex items-center gap-1 uppercase tracking-wider opacity-90"><span>👁️</span> Vision Analysis</div>
@@ -315,13 +422,9 @@ export default function ChatInterface() {
                   <p className="whitespace-pre-wrap leading-relaxed text-sm">
                     {typeof m.content === 'string' ? m.content : JSON.stringify(m.content)}
                   </p>
-                  {/* Only show View Source if we have real matched sources */}
                   {m.role === 'assistant' && m.sources && m.sources.length > 0 && (
                     <div className="mt-3 pt-3 border-t border-[#CFCFCF] flex justify-end">
-                      <button
-                        onClick={() => openSources(m.sources!)}
-                        className="text-xs font-semibold text-primary hover:underline flex items-center gap-1.5"
-                      >
+                      <button onClick={() => openSources(m.sources!)} className="text-xs font-semibold text-primary hover:underline flex items-center gap-1.5">
                         <BookOpen size={12} />
                         View Source ({m.sources.length} match{m.sources.length > 1 ? 'es' : ''})
                       </button>
@@ -343,15 +446,12 @@ export default function ChatInterface() {
           </div>
         </div>
 
-        {/* Input */}
         <div className="shrink-0 px-6 py-4 border-t bg-background/95 backdrop-blur">
           <form onSubmit={handleSubmit} className="flex flex-col gap-3 max-w-4xl mx-auto">
             {imagePreview && (
               <div className="relative inline-block w-20 h-20 border-2 border-primary/20 rounded-xl overflow-hidden shadow-sm self-start ml-16">
                 <img src={imagePreview} alt="preview" className="object-cover w-full h-full" />
-                <button type="button" onClick={() => setImagePreview(null)} className="absolute top-1 right-1 bg-black/60 text-white rounded-full p-1 hover:bg-black/80">
-                  <X size={12} />
-                </button>
+                <button type="button" onClick={() => setImagePreview(null)} className="absolute top-1 right-1 bg-black/60 text-white rounded-full p-1 hover:bg-black/80"><X size={12} /></button>
               </div>
             )}
             <div className="flex gap-3 items-center">
@@ -359,13 +459,10 @@ export default function ChatInterface() {
                 <input {...getInputProps()} />
                 <ImagePlus className="w-6 h-6 text-primary/70 group-hover:text-primary transition-colors" />
               </div>
-              <Input
-                value={input}
-                onChange={e => setInput(e.target.value)}
+              <Input value={input} onChange={e => setInput(e.target.value)}
                 onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) handleSubmit(e as unknown as React.FormEvent); }}
                 placeholder={imagePreview ? "Add context for the visual audit..." : `Ask a question about ${techCategory === 'sap-pack' ? 'SAP FI' : 'Salesforce CRM'}...`}
-                className="flex-1 shadow-sm h-14 rounded-full px-6 border-2 focus-visible:ring-primary text-base"
-              />
+                className="flex-1 shadow-sm h-14 rounded-full px-6 border-2 focus-visible:ring-primary text-base" />
               <Button type="submit" disabled={isSending} className="h-14 w-14 rounded-full shadow-sm shrink-0">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6">
                   <path d="M3.478 2.404a.75.75 0 0 0-.926.941l2.432 7.905H13.5a.75.75 0 0 1 0 1.5H4.984l-2.432 7.905a.75.75 0 0 0 .926.94 60.519 60.519 0 0 0 18.445-8.986.75.75 0 0 0 0-1.218A60.517 60.517 0 0 0 3.478 2.404Z" />
@@ -385,74 +482,14 @@ export default function ChatInterface() {
           <button onClick={() => setIsPanelOpen(false)} className="text-muted-foreground hover:text-foreground"><X size={20} /></button>
         </div>
         <div className="flex-1 overflow-y-auto p-5 flex flex-col gap-4">
-          {!panelSources || panelSources.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center mt-8">No source citations available for this response.</p>
-          ) : (
-            panelSources.map((src, i) => {
-              const isVideo = src.metadata?.type !== 'jira_ticket' && src.metadata?.type !== 'pdf_document';
-              const isPdf = src.metadata?.type === 'pdf_document';
-              const sourceUrl = src.metadata?.source as string | undefined;
-              const frameIndex = src.metadata?.frame_index as number | undefined;
-
-              // Extract YouTube video ID and compute timestamp
-              let videoId: string | null = null;
-              let timestampSec = 0;
-              if (isVideo && sourceUrl) {
-                const m = sourceUrl.match(/(?:v=|youtu\.be\/)([^&?/]+)/);
-                videoId = m ? m[1] : null;
-                timestampSec = (frameIndex ?? 0) * 30; // 30s interval per frame
-              }
-              const thumbnailUrl = videoId ? `https://img.youtube.com/vi/${videoId}/hqdefault.jpg` : null;
-              const videoLink = videoId ? `https://www.youtube.com/watch?v=${videoId}&t=${timestampSec}s` : sourceUrl;
-
-              return (
-                <div key={i} className="border border-border rounded-xl overflow-hidden bg-[#FAFAFA] flex flex-col">
-                  {/* Thumbnail / Icon header */}
-                  {thumbnailUrl ? (
-                    <a href={videoLink} target="_blank" rel="noopener noreferrer" className="relative block group">
-                      <img src={thumbnailUrl} alt="Video frame" className="w-full h-40 object-cover transition-transform duration-300 group-hover:scale-105" />
-                      <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                        <span className="text-white text-sm font-bold bg-black/60 px-3 py-1.5 rounded-full">▶ Jump to {Math.floor(timestampSec / 60)}:{String(timestampSec % 60).padStart(2, '0')}</span>
-                      </div>
-                      <div className="absolute bottom-2 left-2 bg-black/70 text-white text-xs px-2 py-0.5 rounded-full font-semibold">
-                        🎬 Frame {frameIndex ?? '?'} · {Math.floor(timestampSec / 60)}:{String(timestampSec % 60).padStart(2, '0')}
-                      </div>
-                    </a>
-                  ) : (
-                    <div className="w-full h-16 bg-primary/10 flex items-center justify-center">
-                      <span className="text-2xl">🎫</span>
-                    </div>
-                  )}
-
-                  <div className="p-4 flex flex-col gap-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-primary uppercase tracking-wider">
-                        {isVideo ? '🎬 Video Frame' : isPdf ? '📄 PDF Document' : '🎫 JIRA Ticket'}
-                      </span>
-                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${src.score >= 0.7 ? 'bg-green-100 text-green-700' :
-                        src.score >= 0.5 ? 'bg-yellow-100 text-yellow-700' :
-                          'bg-gray-100 text-gray-600'
-                        }`}>
-                        {Math.round(src.score * 100)}% match
-                      </span>
-                    </div>
-                    <p className="text-xs text-foreground leading-relaxed line-clamp-5">{src.text}</p>
-                    {videoLink && (
-                      <a href={videoLink} target="_blank" rel="noopener noreferrer" className="text-xs text-primary/70 hover:text-primary hover:underline truncate">
-                        🔗 {isVideo ? `Watch at ${Math.floor(timestampSec / 60)}:${String(timestampSec % 60).padStart(2, '0')}` : sourceUrl}
-                      </a>
-                    )}
-                  </div>
-                </div>
-              );
-            })
-          )}
+          {!panelSources || panelSources.length === 0
+            ? <p className="text-sm text-muted-foreground text-center mt-8">No source citations available.</p>
+            : panelSources.map((src, i) => <SourceCard key={i} src={src} />)
+          }
         </div>
       </div>
 
-      {isPanelOpen && (
-        <div className="fixed inset-0 bg-black/20 z-40 lg:hidden" onClick={() => setIsPanelOpen(false)} />
-      )}
+      {isPanelOpen && <div className="fixed inset-0 bg-black/20 z-40 lg:hidden" onClick={() => setIsPanelOpen(false)} />}
     </div>
   );
 }

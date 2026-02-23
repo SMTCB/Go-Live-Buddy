@@ -17,7 +17,7 @@ SOURCE_SCORE_THRESHOLD = 0.3
 def _serialize_sources(source_nodes: list) -> str:
     """Serialize source nodes to a JSON marker appended to the stream."""
     sources = []
-    for node in source_nodes[:3]:  # top 3 sources
+    for node in source_nodes[:5]:  # up to 5 — frontend will dedup
         score = node.score or 0
         if score < SOURCE_SCORE_THRESHOLD:
             continue
@@ -25,7 +25,8 @@ def _serialize_sources(source_nodes: list) -> str:
             "text": node.node.get_content()[:500],
             "score": round(score, 3),
             "metadata": {k: v for k, v in (node.node.metadata or {}).items()
-                         if k in ("source", "frame_index", "content_tier", "type")},
+                         if k in ("source", "frame_index", "content_tier", "type",
+                                  "page_label", "ticket_id", "frame_image_url")},
         })
     if not sources:
         return ""
