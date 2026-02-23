@@ -31,13 +31,17 @@ def _serialize_sources(source_nodes: list) -> str:
         return (n.node.metadata or {}).get("type", "video")
 
     def to_dict(n):
-        return {
-            "text": n.node.get_content()[:500],
-            "score": round(n.score or 0, 3),
-            "metadata": {k: v for k, v in (n.node.metadata or {}).items()
-                         if k in ("source", "frame_index", "content_tier", "type",
-                                  "page_label", "ticket_id", "frame_image_url")},
-        }
+        try:
+            return {
+                "text": (n.node.get_content() or '')[:500],
+                "score": round(float(n.score or 0), 3),
+                "metadata": {k: v for k, v in (n.node.metadata or {}).items()
+                             if k in ("source", "frame_index", "content_tier", "type",
+                                      "page_label", "ticket_id", "frame_image_url")},
+            }
+        except Exception as ex:
+            logging.warning(f"Source node serialization failed: {ex}")
+            return None
 
     # ── Step 1: best node per source type ────────────────────────────────────
     type_priority = ["video", "pdf_document", "jira_ticket"]
@@ -60,7 +64,11 @@ def _serialize_sources(source_nodes: list) -> str:
             diverse.append(n)
             selected_ids.add(id(n))
 
-    return f"\n\n__SOURCES__{json.dumps([to_dict(n) for n in diverse])}__END_SOURCES__"
+    result = [to_dict(n) for n in diverse]
+    result = [r for r in result if r is not None]
+    if not result:
+        return ""
+    return f"\n\n__SOURCES__{json.dumps(result)}__END_SOURCES__"
 
 
 async def query_agent_stream(query: str, namespace: str):
@@ -74,15 +82,25 @@ async def query_agent_stream(query: str, namespace: str):
 
         response = query_engine.query(query)
 
+        # Capture source nodes BEFORE consuming the streaming generator.
+        # Some LlamaIndex versions modify/clear source_nodes after stream exhaustion.
+        try:
+            captured_sources = list(response.source_nodes or [])
+        except Exception:
+            captured_sources = []
+
         # Stream text tokens
         for text in response.response_gen:
             yield text
             await asyncio.sleep(0.01)
 
-        # After all text, append real source nodes as a JSON marker
-        sources_marker = _serialize_sources(response.source_nodes)
-        if sources_marker:
-            yield sources_marker
+        # Append source citations marker
+        try:
+            sources_marker = _serialize_sources(captured_sources)
+            if sources_marker:
+                yield sources_marker
+        except Exception as e:
+            logging.warning(f"Sources serialization error (non-fatal): {e}")
 
     except Exception as e:
         logging.error(f"Query Error: {e}")
@@ -133,13 +151,23 @@ async def analyze_image_stream(messages: list, namespace: str, base64_image: str
         query_engine = index.as_query_engine(streaming=True, similarity_top_k=15)
 
         query_response = query_engine.query(query_text)
+
+        # Capture source nodes BEFORE streaming
+        try:
+            captured_sources = list(query_response.source_nodes or [])
+        except Exception:
+            captured_sources = []
+
         for text in query_response.response_gen:
             yield text
             await asyncio.sleep(0.01)
 
-        sources_marker = _serialize_sources(query_response.source_nodes)
-        if sources_marker:
-            yield sources_marker
+        try:
+            sources_marker = _serialize_sources(captured_sources)
+            if sources_marker:
+                yield sources_marker
+        except Exception as e:
+            logging.warning(f"Sources serialization error (non-fatal): {e}")
 
     except Exception as e:
         logging.error(f"Vision Synthesize Error: {e}")
