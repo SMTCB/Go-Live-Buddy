@@ -348,7 +348,10 @@ export default function ChatInterface() {
         ? { messages: newMessages, namespace: techCategory, image: currentImage }
         : { messages: newMessages, namespace: techCategory };
       const res = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-      if (!res.ok) throw new Error('API failed');
+      if (!res.ok) {
+        const errText = await res.text().catch(() => 'No error detail');
+        throw new Error(`API failed [${res.status}]: ${errText.slice(0, 100)}`);
+      }
 
       const reader = res.body?.getReader();
       const decoder = new TextDecoder();

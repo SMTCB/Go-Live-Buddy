@@ -16,8 +16,16 @@ logging.basicConfig(level=logging.INFO)
 SOURCE_SCORE_THRESHOLD = 0.3
 FOCUS_MARKER_START     = "__FOCUS__"
 FOCUS_MARKER_END       = "__END_FOCUS__"
+
 _HERE = os.path.dirname(os.path.abspath(__file__))
-_PUBLIC_FRAMES = os.path.join(_HERE, "..", "frontend", "public", "frames")
+# Resilient pathing for Vercel vs Local
+_PROJ_ROOT = os.path.abspath(os.path.join(_HERE, ".."))
+_PUBLIC_FRAMES = os.path.join(_PROJ_ROOT, "frontend", "public", "frames")
+if not os.path.isdir(_PUBLIC_FRAMES):
+    # Fallback if running from a flat deployment (e.g. backend files mapped to /api)
+    _PUBLIC_FRAMES = os.path.join(_PROJ_ROOT, "public", "frames")
+
+logging.info(f"[Agent] Resolved public frames path: {_PUBLIC_FRAMES}")
 
 
 # ── Source serialisation ──────────────────────────────────────────────────────
