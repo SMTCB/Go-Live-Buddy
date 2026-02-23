@@ -527,6 +527,9 @@ export default function ChatInterface() {
               </div>
             )}
             {messages.map(m => {
+              // Don't render an empty assistant bubble — the typing dots cover this state
+              if (m.role === 'assistant' && !m.content && !m.image) return null;
+
               const maxScore = Math.max(...(m.sources?.map(s => s.score) ?? [0]));
               const lowConfidence = m.sources !== undefined && maxScore < 0.7;
               const noSources = m.role === 'assistant' && m.sources !== undefined && m.sources.length === 0;

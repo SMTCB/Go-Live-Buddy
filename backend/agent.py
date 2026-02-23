@@ -125,32 +125,57 @@ def _get_focus_coord(namespace: str, frame_index: int, query: str) -> dict | Non
 
 def _get_focus_marker(captured_sources: list, query: str, namespace: str = "") -> str:
     """
-    If the best source is a video frame and the image exists locally, call Gemini
-    Vision and return a __FOCUS__ marker string; otherwise return "".
+    Scan captured sources for the best video frame, then call Gemini Vision
+    to get a bounding box. Returns a __FOCUS__ marker string or "".
     """
     if not captured_sources:
+        logging.info("[ShowMe] No captured sources — skipping.")
         return ""
-    top = captured_sources[0]
-    top_meta = top.node.metadata or {}
-    top_type = top_meta.get("type", "video")
-    if top_type in ("pdf_document", "jira_ticket"):
-        return ""  # Show Me only for visual sources
 
+    # Log all source types to help diagnose which node wins
+    for i, n in enumerate(captured_sources[:5]):
+        meta = n.node.metadata or {}
+        logging.info(f"[ShowMe] source[{i}] type={meta.get('type','?')} "
+                     f"frame_index={meta.get('frame_index')} "
+                     f"score={round(float(n.score or 0), 3)} "
+                     f"frame_image_url={meta.get('frame_image_url','')}")
+
+    # Scan for best video-type source (top node may be PDF/Jira)
+    top_video = None
+    for n in captured_sources:
+        meta = n.node.metadata or {}
+        node_type = meta.get("type", "video")
+        if node_type not in ("pdf_document", "jira_ticket"):
+            top_video = n
+            break
+
+    if top_video is None:
+        logging.info("[ShowMe] No video-type source found — skipping Show Me.")
+        return ""
+
+    top_meta = top_video.node.metadata or {}
     frame_index = top_meta.get("frame_index")
     if frame_index is None:
+        logging.info("[ShowMe] Top video source has no frame_index — skipping.")
         return ""
 
-    # Try to derive namespace from frame_image_url; fall back to the query namespace arg
+    # Try to derive namespace from frame_image_url; fall back to the namespace arg
     frame_url = top_meta.get("frame_image_url", "")
     ns_match = re.search(r"/frames/([^/]+)/", frame_url) if frame_url else None
     resolved_ns = ns_match.group(1) if ns_match else namespace
     if not resolved_ns:
-        logging.info("Cannot resolve namespace for focus coord — skipping Show Me")
+        logging.info("[ShowMe] Cannot resolve namespace — skipping Show Me.")
         return ""
+
+    frame_path = os.path.join(_PUBLIC_FRAMES, resolved_ns, f"{int(frame_index)}.jpg")
+    logging.info(f"[ShowMe] Resolved frame path: {frame_path} (exists={os.path.isfile(frame_path)})")
 
     coord = _get_focus_coord(resolved_ns, int(frame_index), query)
     if not coord:
+        logging.info("[ShowMe] _get_focus_coord returned None — no Show Me marker.")
         return ""
+
+    logging.info(f"[ShowMe] ✅ Focus coord generated: {coord}")
     return f"\n\n{FOCUS_MARKER_START}{json.dumps(coord)}{FOCUS_MARKER_END}"
 
 
