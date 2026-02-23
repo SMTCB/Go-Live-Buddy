@@ -207,16 +207,15 @@ function SourceCard({ src, focusCoord, showOverlay }: { src: SourceNode; focusCo
             ⏱ {Math.floor(timestampSec / 60)}:{String(timestampSec % 60).padStart(2, '0')} into video
           </p>
         )}
-        <p className={`text-xs text-foreground leading-relaxed overflow-hidden transition-all ${expanded ? '' : isVideo ? 'line-clamp-4' : 'line-clamp-5'
-          }`}>{src.text}</p>
+        {/* Toggle always sits ABOVE the text — never scrolled off-screen */}
         {src.text.length > 180 && (
           <button
             onClick={() => setExpanded(e => !e)}
-            className="self-start mt-0.5 px-3 py-1 rounded-full text-xs font-semibold border transition-all"
+            className="self-start px-3 py-1 rounded-full text-xs font-semibold border transition-all"
             style={{
               borderColor: '#460073',
               color: '#460073',
-              background: expanded ? '#46007310' : 'transparent',
+              background: expanded ? '#46007315' : 'transparent',
             }}
           >
             {expanded
@@ -224,6 +223,8 @@ function SourceCard({ src, focusCoord, showOverlay }: { src: SourceNode; focusCo
               : `▼ Expand full ${isPdf ? 'excerpt' : isJira ? 'ticket details' : 'description'}`}
           </button>
         )}
+        <p className={`text-xs text-foreground leading-relaxed transition-all ${expanded ? '' : isVideo ? 'line-clamp-4' : 'line-clamp-5'
+          }`}>{src.text}</p>
         {isVideo && videoLink && (
           <a href={videoLink} target="_blank" rel="noopener noreferrer" className="text-xs text-primary/70 hover:text-primary hover:underline truncate">
             🔗 Watch at {Math.floor(timestampSec / 60)}:{String(timestampSec % 60).padStart(2, '0')}
