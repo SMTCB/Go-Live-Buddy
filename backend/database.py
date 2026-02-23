@@ -32,5 +32,11 @@ def get_vector_store(namespace: str):
 
 # Configure LlamaIndex defaults globally
 if google_key:
-    Settings.llm = Gemini(model="gemini-1.5-flash", api_key=google_key)
-    Settings.embed_model = GeminiEmbedding(model_name="models/gemini-embedding-001", api_key=google_key)
+    try:
+        # Standard model name for LlamaIndex Gemini integration
+        Settings.llm = Gemini(model="models/gemini-1.5-flash", api_key=google_key)
+        Settings.embed_model = GeminiEmbedding(model_name="models/gemini-embedding-001", api_key=google_key)
+    except Exception as e:
+        import logging
+        logging.error(f"Failed to initialize Gemini models: {e}")
+        # Fallback or just let it be None - the app will still start

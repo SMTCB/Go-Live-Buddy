@@ -96,7 +96,7 @@ def _get_focus_coord(namespace: str, frame_index: int, query: str) -> dict | Non
     try:
         logging.info(f"[FocusCoord] Calling Gemini Vision for frame {frame_index} in {namespace}...")
         genai.configure(api_key=api_key)
-        model = genai.GenerativeModel("gemini-1.5-flash")
+        model = genai.GenerativeModel("gemini-1.5-flash-latest")
         img = PIL.Image.open(frame_path)
 
         prompt = (
@@ -251,7 +251,7 @@ async def analyze_image_stream(messages: list, namespace: str, base64_image: str
             raise ValueError("GOOGLE_API_KEY is not set.")
 
         genai.configure(api_key=api_key)
-        model = genai.GenerativeModel("gemini-2.5-flash")
+        model = genai.GenerativeModel("gemini-1.5-flash-latest")
 
         yield "👁️ **Vision Analysis Initiated**\n"
         await asyncio.sleep(0.1)
