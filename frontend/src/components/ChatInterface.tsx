@@ -41,7 +41,10 @@ function deduplicateSources(sources: SourceNode[]): SourceNode[] {
       return true;
     }
     if (type === 'jira_ticket') {
-      const tid = String(src.metadata?.ticket_id ?? '');
+      // ticket_id may be absent in legacy Pinecone nodes — fall back to parsing text
+      const rawId = String(src.metadata?.ticket_id ?? '');
+      const fromText = src.text.match(/Ticket ID:\s*(\S+)/)?.[1] ?? '';
+      const tid = rawId || fromText || src.text.slice(0, 80);
       if (seenTicket.has(tid)) return false;
       seenTicket.add(tid);
       return true;
@@ -71,7 +74,11 @@ function SourceCard({ src }: { src: SourceNode }) {
   const sourceUrl = src.metadata?.source as string | undefined;
   const frameIndex = src.metadata?.frame_index as number | undefined;
   const pageLabel = src.metadata?.page_label as string | undefined;
-  const ticketId = src.metadata?.ticket_id as string | undefined;
+  const rawTicketId = src.metadata?.ticket_id as string | undefined;
+  // Legacy nodes: extract ticket ID from text content ("Ticket ID: SAP-1001\n...")
+  const ticketId = rawTicketId || src.text.match(/Ticket ID:\s*(\S+)/)?.[1];
+  const ticketSystem = src.metadata?.system as string
+    || src.text.match(/System:\s*(.+)/)?.[1]?.trim();
   const frameImageUrl = src.metadata?.frame_image_url as string | undefined;
 
   let videoId: string | null = null;
@@ -125,7 +132,7 @@ function SourceCard({ src }: { src: SourceNode }) {
           <span className="text-2xl shrink-0">🎫</span>
           <div>
             <p className="text-xs font-bold text-amber-800">{ticketId ?? 'JIRA Ticket'}</p>
-            <p className="text-xs text-amber-600">{src.metadata?.system as string ?? ''}</p>
+            <p className="text-xs text-amber-600">{ticketSystem ?? ''}</p>
           </div>
         </div>
       )}
