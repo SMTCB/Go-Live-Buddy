@@ -360,47 +360,79 @@ export default function ChatInterface() {
           if (done) break;
           buffer += decoder.decode(value, { stream: true });
 
-          // ── Extract __SOURCES__ ──────────────────────────────────────────
-          const si = buffer.indexOf(SOURCE_MARKER_START);
-          if (si !== -1) {
-            const ei = buffer.indexOf(SOURCE_MARKER_END, si);
-            if (ei !== -1) {
-              const textPart = buffer.slice(0, si);
-              const jsonStr = buffer.slice(si + SOURCE_MARKER_START.length, ei);
-              buffer = buffer.slice(ei + SOURCE_MARKER_END.length);
-              try {
-                const raw: SourceNode[] = JSON.parse(jsonStr);
-                const deduped = deduplicateSources(raw);
-                setMessages(prev => prev.map(m => m.id === assistantId
-                  ? { ...m, content: m.content + textPart, sources: deduped } : m));
+          // Process all markers in the buffer before reading more data
+          let didProcess = true;
+          while (didProcess) {
+            didProcess = false;
+
+            // ── Extract __SOURCES__ ──────────────────────────────────────────
+            const si = buffer.indexOf(SOURCE_MARKER_START);
+            if (si !== -1) {
+              const ei = buffer.indexOf(SOURCE_MARKER_END, si);
+              if (ei !== -1) {
+                const textPart = buffer.slice(0, si);
+                const jsonStr = buffer.slice(si + SOURCE_MARKER_START.length, ei);
+                buffer = buffer.slice(ei + SOURCE_MARKER_END.length);
+                try {
+                  const raw: SourceNode[] = JSON.parse(jsonStr);
+                  const deduped = deduplicateSources(raw);
+                  setMessages(prev => prev.map(m => m.id === assistantId
+                    ? { ...m, content: m.content + textPart, sources: deduped } : m));
+                } catch { /* fall through */ }
+                didProcess = true;
                 continue;
-              } catch { /* fall through */ }
+              }
+            }
+
+            // ── Extract __FOCUS__ ────────────────────────────────────────────
+            const fi = buffer.indexOf(FOCUS_MARKER_START);
+            if (fi !== -1) {
+              const fei = buffer.indexOf(FOCUS_MARKER_END, fi);
+              if (fei !== -1) {
+                // Flush any text before the marker
+                const textBefore = buffer.slice(0, fi);
+                if (textBefore) {
+                  setMessages(prev => prev.map(m => m.id === assistantId
+                    ? { ...m, content: m.content + textBefore } : m));
+                }
+                const jsonStr = buffer.slice(fi + FOCUS_MARKER_START.length, fei);
+                buffer = buffer.slice(fei + FOCUS_MARKER_END.length);
+                try {
+                  const coord: FocusCoord = JSON.parse(jsonStr);
+                  setMessages(prev => prev.map(m => m.id === assistantId
+                    ? { ...m, focusCoord: coord } : m));
+                } catch { /* fall through */ }
+                didProcess = true;
+                continue;
+              }
             }
           }
 
-          // ── Extract __FOCUS__ ────────────────────────────────────────────
-          const fi = buffer.indexOf(FOCUS_MARKER_START);
-          if (fi !== -1) {
-            const fei = buffer.indexOf(FOCUS_MARKER_END, fi);
-            if (fei !== -1) {
-              const jsonStr = buffer.slice(fi + FOCUS_MARKER_START.length, fei);
-              buffer = buffer.slice(fei + FOCUS_MARKER_END.length);
-              try {
-                const coord: FocusCoord = JSON.parse(jsonStr);
-                setMessages(prev => prev.map(m => m.id === assistantId
-                  ? { ...m, focusCoord: coord } : m));
-                continue;
-              } catch { /* fall through */ }
-            }
-          }
-
+          // Flush plain text only if no partial markers remain in buffer
           if (!buffer.includes(SOURCE_MARKER_START) && !buffer.includes(FOCUS_MARKER_START)) {
             const chunk = buffer; buffer = '';
             setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, content: m.content + chunk } : m));
           }
         }
-        if (buffer && !buffer.includes(SOURCE_MARKER_START) && !buffer.includes(FOCUS_MARKER_START)) {
-          setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, content: m.content + buffer } : m));
+        // Final flush of any remaining buffer (after stream ends)
+        if (buffer) {
+          // One last attempt to extract focus from remaining buffer
+          const fi = buffer.indexOf(FOCUS_MARKER_START);
+          const fei = fi !== -1 ? buffer.indexOf(FOCUS_MARKER_END, fi) : -1;
+          if (fi !== -1 && fei !== -1) {
+            const textBefore = buffer.slice(0, fi);
+            const jsonStr = buffer.slice(fi + FOCUS_MARKER_START.length, fei);
+            const textAfter = buffer.slice(fei + FOCUS_MARKER_END.length);
+            try {
+              const coord: FocusCoord = JSON.parse(jsonStr);
+              setMessages(prev => prev.map(m => m.id === assistantId
+                ? { ...m, content: m.content + textBefore + textAfter, focusCoord: coord } : m));
+            } catch {
+              setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, content: m.content + buffer } : m));
+            }
+          } else if (!buffer.includes(SOURCE_MARKER_START)) {
+            setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, content: m.content + buffer } : m));
+          }
         }
       }
     } catch (err) {

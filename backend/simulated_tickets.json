@@ -1,0 +1,12 @@
+[
+  {
+    "ticket_id": "SAP-MOCK-458",
+    "subject": "Cannot access Fiori Launchpad after SAP upgrade",
+    "description": "User receives a blank screen after login. Access worked before upgrade.",
+    "priority": "High",
+    "systemContext": "SAP FI (S/4HANA Cloud)",
+    "namespace": "sap-pack",
+    "createdAt": "2026-02-23T12:06:32.632126+00:00",
+    "status": "Open"
+  }
+]

@@ -262,6 +262,19 @@ async def analyze_image_stream(messages: list, namespace: str, base64_image: str
         except Exception as e:
             logging.warning(f"Sources serialisation error: {e}")
 
+        # Focus coord marker (same as query_agent_stream)
+        try:
+            import concurrent.futures
+            loop = asyncio.get_event_loop()
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                focus_marker = await loop.run_in_executor(
+                    pool, _get_focus_marker, captured_sources, query_text, namespace
+                )
+            if focus_marker:
+                yield focus_marker
+        except Exception as e:
+            logging.warning(f"Focus coord error (non-fatal): {e}")
+
     except Exception as e:
         logging.error(f"Vision Synthesize Error: {e}")
         yield f"[System Error] Vision analysis failed. Error: {str(e)}"
