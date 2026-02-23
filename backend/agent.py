@@ -15,22 +15,52 @@ logging.basicConfig(level=logging.INFO)
 SOURCE_SCORE_THRESHOLD = 0.3
 
 def _serialize_sources(source_nodes: list) -> str:
-    """Serialize source nodes to a JSON marker appended to the stream."""
-    sources = []
-    for node in source_nodes[:5]:  # up to 5 — frontend will dedup
-        score = node.score or 0
-        if score < SOURCE_SCORE_THRESHOLD:
-            continue
-        sources.append({
-            "text": node.node.get_content()[:500],
-            "score": round(score, 3),
-            "metadata": {k: v for k, v in (node.node.metadata or {}).items()
+    """
+    Return the best source per content type (video frame, pdf_document, jira_ticket)
+    then fill remaining slots up to MAX_SOURCES from the overall top scorers.
+    This guarantees cross-type diversity when multiple source types match.
+    """
+    MAX_SOURCES = 5
+
+    # Filter by threshold first
+    candidates = [n for n in source_nodes if (n.score or 0) >= SOURCE_SCORE_THRESHOLD]
+    if not candidates:
+        return ""
+
+    def node_type(n):
+        return (n.node.metadata or {}).get("type", "video")
+
+    def to_dict(n):
+        return {
+            "text": n.node.get_content()[:500],
+            "score": round(n.score or 0, 3),
+            "metadata": {k: v for k, v in (n.node.metadata or {}).items()
                          if k in ("source", "frame_index", "content_tier", "type",
                                   "page_label", "ticket_id", "frame_image_url")},
-        })
-    if not sources:
-        return ""
-    return f"\n\n__SOURCES__{json.dumps(sources)}__END_SOURCES__"
+        }
+
+    # ── Step 1: best node per source type ────────────────────────────────────
+    type_priority = ["video", "pdf_document", "jira_ticket"]
+    best_by_type: dict = {}
+    for n in candidates:  # candidates are already sorted by score desc from Pinecone
+        t = node_type(n)
+        if t not in best_by_type:
+            best_by_type[t] = n
+        if len(best_by_type) == len(type_priority):
+            break
+
+    selected_ids = {id(n) for n in best_by_type.values()}
+    diverse = list(best_by_type.values())  # ordered by type_priority insertion
+
+    # ── Step 2: fill remaining slots with top-scored leftovers ─────────────
+    for n in candidates:
+        if len(diverse) >= MAX_SOURCES:
+            break
+        if id(n) not in selected_ids:
+            diverse.append(n)
+            selected_ids.add(id(n))
+
+    return f"\n\n__SOURCES__{json.dumps([to_dict(n) for n in diverse])}__END_SOURCES__"
 
 
 async def query_agent_stream(query: str, namespace: str):
@@ -40,7 +70,7 @@ async def query_agent_stream(query: str, namespace: str):
         vector_store = get_vector_store(namespace)
         storage_context = StorageContext.from_defaults(vector_store=vector_store)
         index = VectorStoreIndex.from_vector_store(vector_store, storage_context=storage_context)
-        query_engine = index.as_query_engine(streaming=True)
+        query_engine = index.as_query_engine(streaming=True, similarity_top_k=15)
 
         response = query_engine.query(query)
 
@@ -100,7 +130,7 @@ async def analyze_image_stream(messages: list, namespace: str, base64_image: str
         vector_store = get_vector_store(namespace)
         storage_context = StorageContext.from_defaults(vector_store=vector_store)
         index = VectorStoreIndex.from_vector_store(vector_store, storage_context=storage_context)
-        query_engine = index.as_query_engine(streaming=True)
+        query_engine = index.as_query_engine(streaming=True, similarity_top_k=15)
 
         query_response = query_engine.query(query_text)
         for text in query_response.response_gen:
