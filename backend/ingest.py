@@ -175,7 +175,7 @@ def process_ingestion(source_url: str, tech_category: str, content_tier: str, pr
             progress(f"📷 Extracted {num_frames} frames.")
 
             genai.configure(api_key=os.environ.get("GOOGLE_API_KEY", ""))
-            model = genai.GenerativeModel('gemini-2.5-flash')
+            model = genai.GenerativeModel('gemini-1.5-flash')
 
             docs = []
             for i in range(num_frames):

@@ -155,11 +155,16 @@ async def debug_focus(namespace: str = "sap-pack", frame_index: int = 17, query:
     from agent import _get_focus_coord, _PUBLIC_FRAMES
     import os
     frame_path = os.path.join(_PUBLIC_FRAMES, namespace, f"{frame_index}.jpg")
+    
+    # We'll use a local import trick to get the error if we want, 
+    # but for now let's just make sure agent.py returns it or we log it.
     coord = _get_focus_coord(namespace, frame_index, query)
+    
     return JSONResponse({
         "frame_path": frame_path,
         "frame_exists": os.path.isfile(frame_path),
         "google_api_key_set": bool(os.environ.get("GOOGLE_API_KEY", "")),
         "coord": coord,
         "success": coord is not None,
+        "note": "Check backend terminal for [FocusCoord] logs if success is false"
     })
