@@ -1,10 +1,10 @@
 fastapi
-uvicorn
+uvicorn[standard]
 llama-index-core
 llama-index-llms-gemini
 llama-index-embeddings-gemini
 llama-index-vector-stores-pinecone
-pinecone-client
+pinecone
 python-dotenv
 Pillow
 google-generativeai
