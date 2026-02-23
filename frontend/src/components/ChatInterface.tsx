@@ -206,11 +206,23 @@ function SourceCard({ src, focusCoord, showOverlay }: { src: SourceNode; focusCo
             ⏱ {Math.floor(timestampSec / 60)}:{String(timestampSec % 60).padStart(2, '0')} into video
           </p>
         )}
-        <p className={`text-xs text-foreground leading-relaxed ${expanded ? '' : 'line-clamp-4'}`}>{src.text}</p>
-        <button onClick={() => setExpanded(e => !e)}
-          className="flex items-center gap-1 text-xs text-primary/70 hover:text-primary transition-colors self-start">
-          {expanded ? <><ChevronUp size={12} /> Show less</> : <><ChevronDown size={12} /> Read more</>}
-        </button>
+        <p className={`text-xs text-foreground leading-relaxed overflow-hidden transition-all ${expanded ? '' : isVideo ? 'line-clamp-4' : 'line-clamp-5'
+          }`}>{src.text}</p>
+        {src.text.length > 180 && (
+          <button
+            onClick={() => setExpanded(e => !e)}
+            className="self-start mt-0.5 px-3 py-1 rounded-full text-xs font-semibold border transition-all"
+            style={{
+              borderColor: '#460073',
+              color: '#460073',
+              background: expanded ? '#46007310' : 'transparent',
+            }}
+          >
+            {expanded
+              ? '▲ Collapse'
+              : `▼ Expand full ${isPdf ? 'excerpt' : isJira ? 'ticket' : 'description'}`}
+          </button>
+        )}
         {isVideo && videoLink && (
           <a href={videoLink} target="_blank" rel="noopener noreferrer" className="text-xs text-primary/70 hover:text-primary hover:underline truncate">
             🔗 Watch at {Math.floor(timestampSec / 60)}:{String(timestampSec % 60).padStart(2, '0')}
@@ -489,8 +501,8 @@ export default function ChatInterface() {
               return (
                 <div key={m.id} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                   <div className={`px-5 py-4 rounded-2xl max-w-[85%] shadow-sm flex flex-col gap-3 ${m.role === 'user'
-                      ? 'bg-primary text-primary-foreground rounded-br-sm'
-                      : 'bg-[#F1F1EF] text-[#000000] border border-[#CFCFCF] rounded-bl-sm'}`}>
+                    ? 'bg-primary text-primary-foreground rounded-br-sm'
+                    : 'bg-[#F1F1EF] text-[#000000] border border-[#CFCFCF] rounded-bl-sm'}`}>
 
                     {m.image && (
                       <div className="mb-1 p-2 bg-black/10 rounded-lg inline-block">
