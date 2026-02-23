@@ -145,10 +145,10 @@ function SourceCard({ src, focusCoord, showOverlay }: { src: SourceNode; focusCo
   const scoreColor = src.score >= 0.7 ? 'bg-green-100 text-green-700' : src.score >= 0.5 ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-600';
 
   return (
-    <div className="border border-border rounded-xl overflow-hidden bg-[#FAFAFA] flex flex-col">
+    <div className="border border-border rounded-xl bg-[#FAFAFA] flex flex-col">
       {/* Visual header */}
       {isVideo && (effectiveFrameUrl || videoId) && !showOverlay && (
-        <a href={videoLink ?? '#'} target="_blank" rel="noopener noreferrer" className="relative block group shrink-0">
+        <a href={videoLink ?? '#'} target="_blank" rel="noopener noreferrer" className="relative block group shrink-0 overflow-hidden rounded-t-xl">
           <img src={effectiveFrameUrl ?? `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`}
             alt={`Frame ${frameIndex}`} className="w-full h-44 object-cover transition-transform duration-300 group-hover:scale-105" />
           <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
@@ -172,7 +172,7 @@ function SourceCard({ src, focusCoord, showOverlay }: { src: SourceNode; focusCo
       )}
       {isPdf && (
         <a href={sourceUrl ?? '#'} target="_blank" rel="noopener noreferrer"
-          className="flex items-center gap-3 w-full px-5 py-3 bg-blue-50 hover:bg-blue-100 transition-colors shrink-0">
+          className="flex items-center gap-3 w-full px-5 py-3 bg-blue-50 hover:bg-blue-100 transition-colors shrink-0 rounded-t-xl overflow-hidden">
           <span className="text-2xl shrink-0">📄</span>
           <div className="flex-1 min-w-0">
             <p className="text-xs font-bold text-blue-800 truncate">{sourceUrl?.split('/').pop() ?? 'Document'}</p>
@@ -181,7 +181,7 @@ function SourceCard({ src, focusCoord, showOverlay }: { src: SourceNode; focusCo
         </a>
       )}
       {isJira && (
-        <div className="flex items-center gap-3 w-full px-5 py-3 bg-amber-50 shrink-0">
+        <div className="flex items-center gap-3 w-full px-5 py-3 bg-amber-50 shrink-0 rounded-t-xl overflow-hidden">
           <span className="text-2xl shrink-0">🎫</span>
           <div>
             <p className="text-xs font-bold text-amber-800">{ticketId ?? 'JIRA Ticket'}</p>

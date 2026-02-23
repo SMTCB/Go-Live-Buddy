@@ -37,11 +37,11 @@ def _serialize_sources(source_nodes: list) -> str:
     def to_dict(n):
         try:
             return {
-                "text":  (n.node.get_content() or "")[:500],
+                "text":  (n.node.get_content() or "")[:1500],
                 "score": round(float(n.score or 0), 3),
                 "metadata": {k: v for k, v in (n.node.metadata or {}).items()
                              if k in ("source", "frame_index", "content_tier", "type",
-                                      "page_label", "ticket_id", "frame_image_url")},
+                                       "page_label", "ticket_id", "frame_image_url")},
             }
         except Exception as ex:
             logging.warning(f"Source node serialisation failed: {ex}")
@@ -93,7 +93,7 @@ def _get_focus_coord(namespace: str, frame_index: int, query: str) -> dict | Non
             return None
 
         genai.configure(api_key=api_key)
-        model = genai.GenerativeModel("gemini-2.5-flash")
+        model = genai.GenerativeModel("gemini-1.5-flash")
         img = PIL.Image.open(frame_path)
 
         prompt = (
@@ -123,7 +123,7 @@ def _get_focus_coord(namespace: str, frame_index: int, query: str) -> dict | Non
     return None
 
 
-def _get_focus_marker(captured_sources: list, query: str) -> str:
+def _get_focus_marker(captured_sources: list, query: str, namespace: str = "") -> str:
     """
     If the best source is a video frame and the image exists locally, call Gemini
     Vision and return a __FOCUS__ marker string; otherwise return "".
@@ -137,17 +137,18 @@ def _get_focus_marker(captured_sources: list, query: str) -> str:
         return ""  # Show Me only for visual sources
 
     frame_index = top_meta.get("frame_index")
-    # Derive namespace from frame_image_url (e.g. /frames/sap-pack/17.jpg)
-    frame_url = top_meta.get("frame_image_url", "")
-    ns_match = re.search(r"/frames/([^/]+)/", frame_url) if frame_url else None
-    if not ns_match:
-        return ""
-    namespace = ns_match.group(1)
-
     if frame_index is None:
         return ""
 
-    coord = _get_focus_coord(namespace, int(frame_index), query)
+    # Try to derive namespace from frame_image_url; fall back to the query namespace arg
+    frame_url = top_meta.get("frame_image_url", "")
+    ns_match = re.search(r"/frames/([^/]+)/", frame_url) if frame_url else None
+    resolved_ns = ns_match.group(1) if ns_match else namespace
+    if not resolved_ns:
+        logging.info("Cannot resolve namespace for focus coord — skipping Show Me")
+        return ""
+
+    coord = _get_focus_coord(resolved_ns, int(frame_index), query)
     if not coord:
         return ""
     return f"\n\n{FOCUS_MARKER_START}{json.dumps(coord)}{FOCUS_MARKER_END}"
@@ -188,7 +189,7 @@ async def query_agent_stream(query: str, namespace: str):
             loop = asyncio.get_event_loop()
             with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
                 focus_marker = await loop.run_in_executor(
-                    pool, _get_focus_marker, captured_sources, query
+                    pool, _get_focus_marker, captured_sources, query, namespace
                 )
             if focus_marker:
                 yield focus_marker
