@@ -115,11 +115,12 @@ function ShowMeOverlayInline({ imageUrl, coord }: { imageUrl: string; coord: Foc
 
 // ── Source Card ───────────────────────────────────────────────────────────────
 function SourceCard({ src, focusCoord, showOverlay }: { src: SourceNode; focusCoord?: FocusCoord | null; showOverlay?: boolean }) {
-  const [expanded, setExpanded] = useState(false);
-
   const isVideo = src.metadata?.type !== 'jira_ticket' && src.metadata?.type !== 'pdf_document';
   const isPdf = src.metadata?.type === 'pdf_document';
   const isJira = src.metadata?.type === 'jira_ticket';
+
+  // PDF/JIRA: show full text by default (content is the citation); video: collapse long AI descriptions
+  const [expanded, setExpanded] = useState(!isVideo);
 
   const sourceUrl = src.metadata?.source as string | undefined;
   const frameIndex = src.metadata?.frame_index as number | undefined;
@@ -220,7 +221,7 @@ function SourceCard({ src, focusCoord, showOverlay }: { src: SourceNode; focusCo
           >
             {expanded
               ? '▲ Collapse'
-              : `▼ Expand full ${isPdf ? 'excerpt' : isJira ? 'ticket' : 'description'}`}
+              : `▼ Expand full ${isPdf ? 'excerpt' : isJira ? 'ticket details' : 'description'}`}
           </button>
         )}
         {isVideo && videoLink && (
