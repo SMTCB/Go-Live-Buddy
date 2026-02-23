@@ -145,3 +145,21 @@ async def draft_ticket(req: TicketDraftRequest):
 @app.get("/api/tickets")
 async def list_tickets():
     return JSONResponse(_load_tickets())
+
+@app.get("/api/debug/focus")
+async def debug_focus(namespace: str = "sap-pack", frame_index: int = 17, query: str = "How do I upload a journal entry file?"):
+    """
+    Debug endpoint: directly test Gemini Vision focus coord generation.
+    Usage: GET /api/debug/focus?namespace=sap-pack&frame_index=17&query=How+do+I+upload+a+journal+entry
+    """
+    from agent import _get_focus_coord, _PUBLIC_FRAMES
+    import os
+    frame_path = os.path.join(_PUBLIC_FRAMES, namespace, f"{frame_index}.jpg")
+    coord = _get_focus_coord(namespace, frame_index, query)
+    return JSONResponse({
+        "frame_path": frame_path,
+        "frame_exists": os.path.isfile(frame_path),
+        "google_api_key_set": bool(os.environ.get("GOOGLE_API_KEY", "")),
+        "coord": coord,
+        "success": coord is not None,
+    })

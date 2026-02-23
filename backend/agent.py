@@ -83,15 +83,18 @@ def _get_focus_coord(namespace: str, frame_index: int, query: str) -> dict | Non
     Returns { x_pct, y_pct, w_pct, h_pct, label } or None.
     """
     frame_path = os.path.join(_PUBLIC_FRAMES, namespace, f"{frame_index}.jpg")
+    logging.info(f"[FocusCoord] Checking frame: {frame_path}")
     if not os.path.isfile(frame_path):
-        logging.info(f"Frame image not found locally: {frame_path}")
+        logging.warning(f"[FocusCoord] ❌ Frame file not found: {frame_path}")
+        return None
+
+    api_key = os.environ.get("GOOGLE_API_KEY", "")
+    if not api_key:
+        logging.warning("[FocusCoord] ❌ GOOGLE_API_KEY not set — cannot call Gemini Vision.")
         return None
 
     try:
-        api_key = os.environ.get("GOOGLE_API_KEY", "")
-        if not api_key:
-            return None
-
+        logging.info(f"[FocusCoord] Calling Gemini Vision for frame {frame_index} in {namespace}...")
         genai.configure(api_key=api_key)
         model = genai.GenerativeModel("gemini-1.5-flash")
         img = PIL.Image.open(frame_path)
@@ -112,14 +115,20 @@ def _get_focus_coord(namespace: str, frame_index: int, query: str) -> dict | Non
         )
         response = model.generate_content([prompt, img])
         raw = (response.text or "").strip()
+        logging.info(f"[FocusCoord] Gemini raw response: {raw[:300]}")
         # Strip markdown fences if present
         raw = re.sub(r"```[a-z]*\n?", "", raw).strip().rstrip("`").strip()
         coord = json.loads(raw)
         # Validate
         if all(k in coord for k in ("x_pct", "y_pct", "w_pct", "h_pct", "label")):
+            logging.info(f"[FocusCoord] ✅ Success: {coord}")
             return coord
+        else:
+            logging.warning(f"[FocusCoord] ❌ JSON missing required keys: {coord}")
+    except json.JSONDecodeError as ex:
+        logging.warning(f"[FocusCoord] ❌ JSON parse failed: {ex} | raw was: {raw[:200]}")
     except Exception as ex:
-        logging.warning(f"Focus coord call failed: {ex}")
+        logging.warning(f"[FocusCoord] ❌ Gemini call failed: {ex}")
     return None
 
 

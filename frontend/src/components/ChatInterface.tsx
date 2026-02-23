@@ -567,9 +567,9 @@ export default function ChatInterface() {
                         {m.helpful === true && <span className="text-xs text-green-600 mr-auto">👍 Thanks for the feedback!</span>}
                         {m.helpful === false && <span className="text-xs text-orange-600 mr-auto">👎 Sorry about that!</span>}
 
-                        {/* Show Me button */}
-                        {m.focusCoord && m.sources && m.sources.some(s => s.metadata?.type !== 'jira_ticket' && s.metadata?.type !== 'pdf_document') && (
-                          <button onClick={() => openSources(m.sources!, m.focusCoord, true)}
+                        {/* Show Me button — visible whenever there's a video source */}
+                        {m.sources && m.sources.some(s => s.metadata?.type !== 'jira_ticket' && s.metadata?.type !== 'pdf_document') && (
+                          <button onClick={() => openSources(m.sources!, m.focusCoord, !!m.focusCoord)}
                             className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-full transition-colors text-white"
                             style={{ background: '#7500C0' }}>
                             <Target size={12} /> Show Me
