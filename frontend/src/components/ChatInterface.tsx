@@ -389,7 +389,8 @@ export default function ChatInterface() {
             <p className="text-sm text-muted-foreground text-center mt-8">No source citations available for this response.</p>
           ) : (
             panelSources.map((src, i) => {
-              const isVideo = src.metadata?.type !== 'jira_ticket';
+              const isVideo = src.metadata?.type !== 'jira_ticket' && src.metadata?.type !== 'pdf_document';
+              const isPdf = src.metadata?.type === 'pdf_document';
               const sourceUrl = src.metadata?.source as string | undefined;
               const frameIndex = src.metadata?.frame_index as number | undefined;
 
@@ -426,11 +427,11 @@ export default function ChatInterface() {
                   <div className="p-4 flex flex-col gap-2">
                     <div className="flex items-center justify-between">
                       <span className="text-xs font-bold text-primary uppercase tracking-wider">
-                        {isVideo ? '🎬 Video Frame' : '🎫 JIRA Ticket'}
+                        {isVideo ? '🎬 Video Frame' : isPdf ? '📄 PDF Document' : '🎫 JIRA Ticket'}
                       </span>
                       <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${src.score >= 0.7 ? 'bg-green-100 text-green-700' :
-                          src.score >= 0.5 ? 'bg-yellow-100 text-yellow-700' :
-                            'bg-gray-100 text-gray-600'
+                        src.score >= 0.5 ? 'bg-yellow-100 text-yellow-700' :
+                          'bg-gray-100 text-gray-600'
                         }`}>
                         {Math.round(src.score * 100)}% match
                       </span>
