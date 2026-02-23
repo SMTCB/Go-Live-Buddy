@@ -32,5 +32,5 @@ def get_vector_store(namespace: str):
 
 # Configure LlamaIndex defaults globally
 if google_key:
-    Settings.llm = Gemini(model="models/gemini-2.5-flash", api_key=google_key)
+    Settings.llm = Gemini(model="gemini-1.5-flash", api_key=google_key)
     Settings.embed_model = GeminiEmbedding(model_name="models/gemini-embedding-001", api_key=google_key)
