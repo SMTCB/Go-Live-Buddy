@@ -54,7 +54,13 @@ function deduplicateSources(sources: SourceNode[]): SourceNode[] {
   });
 }
 
-// ── Expandable source card ────────────────────────────────────────────────────
+/** Map YouTube video ID → Pinecone namespace, used to derive static frame image URLs for
+ *  nodes ingested before frame_image_url was added to metadata. */
+const VIDEO_NS_MAP: Record<string, string> = {
+  yBNmvqBwUAI: 'sap-pack',  // SAP Fiori tutorial
+  xLCLrsDcIHk: 'crm-pack',  // Salesforce CRM tutorial
+};
+
 function SourceCard({ src }: { src: SourceNode }) {
   const [expanded, setExpanded] = useState(false);
 
@@ -75,6 +81,12 @@ function SourceCard({ src }: { src: SourceNode }) {
     videoId = m ? m[1] : null;
     timestampSec = (frameIndex ?? 0) * 30;
   }
+  // Derive static asset URL from frame_index even if not stored in Pinecone metadata
+  const nsFromVideo = videoId ? VIDEO_NS_MAP[videoId] : null;
+  const derivedFrameUrl = nsFromVideo !== undefined && frameIndex !== undefined
+    ? `/frames/${nsFromVideo}/${frameIndex}.jpg`
+    : null;
+  const effectiveFrameUrl = frameImageUrl ?? derivedFrameUrl;
   const videoLink = videoId ? `https://www.youtube.com/watch?v=${videoId}&t=${timestampSec}s` : sourceUrl;
   const scoreColor = src.score >= 0.7 ? 'bg-green-100 text-green-700' : src.score >= 0.5 ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-600';
 
@@ -85,7 +97,7 @@ function SourceCard({ src }: { src: SourceNode }) {
       {isVideo && (frameImageUrl || videoId) && (
         <a href={videoLink ?? '#'} target="_blank" rel="noopener noreferrer" className="relative block group shrink-0">
           <img
-            src={frameImageUrl ?? `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`}
+            src={effectiveFrameUrl ?? `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`}
             alt={`Frame ${frameIndex}`}
             className="w-full h-44 object-cover transition-transform duration-300 group-hover:scale-105"
           />
