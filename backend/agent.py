@@ -179,14 +179,18 @@ def _get_focus_coord(namespace: str, frame_index: int, query: str) -> dict | Non
 
 def _get_focus_marker(captured_sources: list, query: str, namespace: str = "") -> str:
     """
-    Scan captured sources for the best video frame, then call Gemini Vision
-    to get a bounding box. Returns a __FOCUS__ marker string or "".
+    Scan captured sources for ALL video frames, call Gemini Vision on each
+    (in parallel, capped at MAX_VIDEO_FRAMES), and return a __FOCUS__ marker
+    containing a JSON map: { "frame_index": coord_dict, ... }.
+    Returns "" if no coords could be generated.
     """
+    MAX_VIDEO_FRAMES = 3  # max parallel Gemini Vision calls
+
     if not captured_sources:
         logging.info("[ShowMe] No captured sources — skipping.")
         return ""
 
-    # Log all source types to help diagnose which node wins
+    # Log all source types
     for i, n in enumerate(captured_sources[:5]):
         meta = n.node.metadata or {}
         logging.info(f"[ShowMe] source[{i}] type={meta.get('type','?')} "
@@ -194,43 +198,59 @@ def _get_focus_marker(captured_sources: list, query: str, namespace: str = "") -
                      f"score={round(float(n.score or 0), 3)} "
                      f"frame_image_url={meta.get('frame_image_url','')}")
 
-    # Scan for best video-type source (top node may be PDF/Jira)
-    top_video = None
+    # Collect unique video sources (deduplicate by frame_index)
+    seen_frames: set = set()
+    video_tasks: list = []  # (frame_index_int, resolved_namespace)
     for n in captured_sources:
         meta = n.node.metadata or {}
-        node_type = meta.get("type", "video")
-        if node_type not in ("pdf_document", "jira_ticket"):
-            top_video = n
+        if meta.get("type") in ("pdf_document", "jira_ticket"):
+            continue
+        frame_index = meta.get("frame_index")
+        if frame_index is None:
+            continue
+        fi = int(frame_index)
+        if fi in seen_frames:
+            continue
+        seen_frames.add(fi)
+        # Resolve namespace
+        frame_url = meta.get("frame_image_url", "")
+        ns_match = re.search(r"/frames/([^/]+)/", frame_url) if frame_url else None
+        resolved_ns = ns_match.group(1) if ns_match else namespace
+        if resolved_ns:
+            video_tasks.append((fi, resolved_ns))
+        if len(video_tasks) >= MAX_VIDEO_FRAMES:
             break
 
-    if top_video is None:
-        logging.info("[ShowMe] No video-type source found — skipping Show Me.")
+    if not video_tasks:
+        logging.info("[ShowMe] No video sources with frame_index — skipping.")
         return ""
 
-    top_meta = top_video.node.metadata or {}
-    frame_index = top_meta.get("frame_index")
-    if frame_index is None:
-        logging.info("[ShowMe] Top video source has no frame_index — skipping.")
+    logging.info(f"[ShowMe] Generating focus coords for {len(video_tasks)} video frame(s) in parallel…")
+
+    # ── Run Gemini Vision calls in parallel ───────────────────────────────────
+    import concurrent.futures
+
+    def _call(task):
+        fi, ns = task
+        coord = _get_focus_coord(ns, fi, query)
+        return str(fi), coord
+
+    coords_map: dict = {}
+    with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_VIDEO_FRAMES) as pool:
+        for frame_key, coord in pool.map(_call, video_tasks):
+            if coord is not None:
+                coords_map[frame_key] = coord
+                logging.info(f"[ShowMe] ✅ coord for frame {frame_key}: {coord}")
+            else:
+                logging.info(f"[ShowMe] ⚠️  No coord returned for frame {frame_key}")
+
+    if not coords_map:
+        logging.info("[ShowMe] All Gemini Vision calls returned None — no Show Me marker.")
         return ""
 
-    # Try to derive namespace from frame_image_url; fall back to the namespace arg
-    frame_url = top_meta.get("frame_image_url", "")
-    ns_match = re.search(r"/frames/([^/]+)/", frame_url) if frame_url else None
-    resolved_ns = ns_match.group(1) if ns_match else namespace
-    if not resolved_ns:
-        logging.info("[ShowMe] Cannot resolve namespace — skipping Show Me.")
-        return ""
+    logging.info(f"[ShowMe] ✅ Returning coords map with {len(coords_map)} frame(s).")
+    return f"\n\n{FOCUS_MARKER_START}{json.dumps(coords_map)}{FOCUS_MARKER_END}"
 
-    frame_path = os.path.join(_PUBLIC_FRAMES, resolved_ns, f"{int(frame_index)}.jpg")
-    logging.info(f"[ShowMe] Resolved frame path: {frame_path} (exists={os.path.isfile(frame_path)})")
-
-    coord = _get_focus_coord(resolved_ns, int(frame_index), query)
-    if not coord:
-        logging.info("[ShowMe] _get_focus_coord returned None — no Show Me marker.")
-        return ""
-
-    logging.info(f"[ShowMe] ✅ Focus coord generated: {coord}")
-    return f"\n\n{FOCUS_MARKER_START}{json.dumps(coord)}{FOCUS_MARKER_END}"
 
 
 # ── Query stream ──────────────────────────────────────────────────────────────
