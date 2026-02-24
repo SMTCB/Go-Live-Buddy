@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useState, useEffect, useRef } from 'react';
 import { useDropzone } from 'react-dropzone';
-import { ImagePlus, X, Plus, MessageSquare, ChevronLeft, BookOpen, ChevronDown, ChevronUp, Target, Ticket } from 'lucide-react';
+import { ImagePlus, X, Plus, MessageSquare, ChevronLeft, BookOpen, ChevronDown, ChevronUp, Target, Ticket, BarChart } from 'lucide-react';
 import dynamic from 'next/dynamic';
 
 const JiraDraftModal = dynamic(() => import('./JiraDraftModal'), { ssr: false });
@@ -534,8 +534,13 @@ export default function ChatInterface() {
             <Plus size={12} /> New
           </button>
         </div>
-        <div className="flex-1 overflow-y-auto py-2">
-          {sessions.length === 0 && <p className="text-xs text-muted-foreground px-4 py-6 text-center">No chats yet.</p>}
+        <div className="flex-1 overflow-y-auto py-2 flex flex-col gap-1">
+          <a href="/analytics"
+            className="flex items-center gap-2 px-3 py-2.5 cursor-pointer rounded-lg mx-2 mb-3 bg-primary text-white font-medium hover:bg-primary/90 transition-colors text-sm shadow-sm">
+            <BarChart size={14} className="shrink-0" />
+            <span className="flex-1">Project Pulse Analytics</span>
+          </a>
+          {sessions.length === 0 && <p className="text-xs text-muted-foreground px-4 py-2 text-center">No chats yet.</p>}
           {[...sessions].reverse().map(sess => (
             <div key={sess.id} onClick={() => selectSession(sess.id)}
               className={`group flex items-center gap-2 px-3 py-2.5 cursor-pointer rounded-lg mx-2 mb-1 transition-colors text-sm ${sess.id === activeId ? 'bg-primary/10 text-primary font-medium' : 'hover:bg-primary/5 text-foreground'}`}>
