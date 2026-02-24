@@ -160,7 +160,8 @@ async def debug_focus(
     from agent import _PUBLIC_FRAMES, _load_frame_image, _get_focus_coord
 
     # ── Environment ────────────────────────────────────────────────────────────
-    frontend_url = os.environ.get("FRONTEND_URL", "").rstrip("/")
+    raw_frontend = os.environ.get("FRONTEND_URL", "").rstrip("/")
+    frontend_url = (raw_frontend if raw_frontend.startswith("http") else f"https://{raw_frontend}") if raw_frontend else ""
     google_key_set = bool(os.environ.get("GOOGLE_API_KEY", ""))
     frame_path = os.path.join(_PUBLIC_FRAMES, namespace, f"{frame_index}.jpg")
     local_exists = os.path.isfile(frame_path)

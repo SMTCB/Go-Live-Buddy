@@ -98,14 +98,17 @@ def _load_frame_image(namespace: str, frame_index: int) -> "PIL.Image.Image | No
         return PIL.Image.open(frame_path)
 
     # ── Strategy 2: fetch from Vercel static URL ───────────────────────────────
-    frontend_url = os.environ.get("FRONTEND_URL", "").rstrip("/")
-    if not frontend_url:
+    raw_frontend = os.environ.get("FRONTEND_URL", "").rstrip("/")
+    if not raw_frontend:
         logging.warning(
             "[FocusCoord] ❌ Frame not on local disk and FRONTEND_URL is not set. "
             "Set FRONTEND_URL=https://your-app.vercel.app in Railway env vars to enable "
             "Show Me bounding-box in production."
         )
         return None
+
+    # Auto-add https:// if user set the env var without a protocol
+    frontend_url = raw_frontend if raw_frontend.startswith("http") else f"https://{raw_frontend}"
 
     frame_url = f"{frontend_url}/frames/{namespace}/{frame_index}.jpg"
     logging.info(f"[FocusCoord] Local file not found — fetching from: {frame_url}")
