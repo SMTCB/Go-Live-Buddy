@@ -469,9 +469,15 @@ export default function ChatInterface() {
             const jsonStr = buffer.slice(fi + FOCUS_MARKER_START.length, fei);
             const textAfter = buffer.slice(fei + FOCUS_MARKER_END.length);
             try {
-              const coord: FocusCoord = JSON.parse(jsonStr);
-              setMessages(prev => prev.map(m => m.id === assistantId
-                ? { ...m, content: m.content + textBefore + textAfter, focusCoord: coord } : m));
+              const parsed: Record<string, unknown> = JSON.parse(jsonStr);
+              const isLegacySingleCoord = 'x_pct' in parsed && 'y_pct' in parsed;
+              setMessages(prev => prev.map(m => {
+                if (m.id !== assistantId) return m;
+                const base = { ...m, content: m.content + textBefore + textAfter };
+                return isLegacySingleCoord
+                  ? { ...base, focusCoord: parsed as unknown as FocusCoord }
+                  : { ...base, focusCoords: parsed as Record<string, FocusCoord> };
+              }));
             } catch {
               setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, content: m.content + buffer } : m));
             }
