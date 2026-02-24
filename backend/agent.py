@@ -84,16 +84,51 @@ def _serialize_sources(source_nodes: list) -> str:
 
 
 # ── "Show Me" Focus Coordinate ────────────────────────────────────────────────
+def _load_frame_image(namespace: str, frame_index: int) -> "PIL.Image.Image | None":
+    """
+    Load a video frame as a PIL Image.
+    Strategy 1 (local dev): read from filesystem.
+    Strategy 2 (Railway production): fetch from Vercel static URL via HTTP.
+    Returns None if neither strategy works.
+    """
+    # ── Strategy 1: local filesystem ──────────────────────────────────────────
+    frame_path = os.path.join(_PUBLIC_FRAMES, namespace, f"{frame_index}.jpg")
+    if os.path.isfile(frame_path):
+        logging.info(f"[FocusCoord] ✅ Loading frame from local file: {frame_path}")
+        return PIL.Image.open(frame_path)
+
+    # ── Strategy 2: fetch from Vercel static URL ───────────────────────────────
+    frontend_url = os.environ.get("FRONTEND_URL", "").rstrip("/")
+    if not frontend_url:
+        logging.warning(
+            "[FocusCoord] ❌ Frame not on local disk and FRONTEND_URL is not set. "
+            "Set FRONTEND_URL=https://your-app.vercel.app in Railway env vars to enable "
+            "Show Me bounding-box in production."
+        )
+        return None
+
+    frame_url = f"{frontend_url}/frames/{namespace}/{frame_index}.jpg"
+    logging.info(f"[FocusCoord] Local file not found — fetching from: {frame_url}")
+    try:
+        import urllib.request
+        with urllib.request.urlopen(frame_url, timeout=8) as resp:
+            data = resp.read()
+        img = PIL.Image.open(BytesIO(data))
+        logging.info(f"[FocusCoord] ✅ Frame fetched from Vercel ({len(data):,} bytes)")
+        return img
+    except Exception as ex:
+        logging.warning(f"[FocusCoord] ❌ HTTP fetch failed for {frame_url}: {ex}")
+        return None
+
+
 def _get_focus_coord(namespace: str, frame_index: int, query: str) -> dict | None:
     """
     Call Gemini Vision on the saved frame thumbnail and ask for a bounding box
     (in percentage coordinates) around the UI element relevant to the query.
     Returns { x_pct, y_pct, w_pct, h_pct, label } or None.
     """
-    frame_path = os.path.join(_PUBLIC_FRAMES, namespace, f"{frame_index}.jpg")
-    logging.info(f"[FocusCoord] Checking frame: {frame_path}")
-    if not os.path.isfile(frame_path):
-        logging.warning(f"[FocusCoord] ❌ Frame file not found: {frame_path}")
+    img = _load_frame_image(namespace, frame_index)
+    if img is None:
         return None
 
     api_key = os.environ.get("GOOGLE_API_KEY", "")
@@ -105,7 +140,6 @@ def _get_focus_coord(namespace: str, frame_index: int, query: str) -> dict | Non
         logging.info(f"[FocusCoord] Calling Gemini Vision for frame {frame_index} in {namespace}...")
         genai.configure(api_key=api_key)
         model = genai.GenerativeModel("gemini-2.0-flash")
-        img = PIL.Image.open(frame_path)
 
         prompt = (
             f"The user needs help with: {query}\n\n"
