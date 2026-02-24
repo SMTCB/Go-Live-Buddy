@@ -11,13 +11,16 @@ const JiraDraftModal = dynamic(() => import('./JiraDraftModal'), { ssr: false })
 // ── Types ─────────────────────────────────────────────────────────────────────
 type SourceNode = { text: string; score: number; metadata: Record<string, string | number> };
 type FocusCoord = { x_pct: number; y_pct: number; w_pct: number; h_pct: number; label: string };
+// focusCoords: map of frame_index_string → coord (new multi-frame format)
+// focusCoord: legacy single-coord kept for backward compat with old localStorage sessions
 type Message = {
   id: string;
   role: 'user' | 'assistant';
   content: string;
   image?: string;
   sources?: SourceNode[];
-  focusCoord?: FocusCoord | null;
+  focusCoords?: Record<string, FocusCoord>; // new: map keyed by frame_index string
+  focusCoord?: FocusCoord | null;           // legacy: single coord for old sessions
   helpful?: boolean | null;    // true=👍, false=👎, null=not voted
 };
 type ChatSession = { id: string; title: string; messages: Message[]; createdAt: number };
@@ -280,7 +283,7 @@ export default function ChatInterface() {
   const [isSending, setIsSending] = useState(false);
   const [techCategory, setTechCategory] = useState('sap-pack');
   const [panelSources, setPanelSources] = useState<SourceNode[] | null>(null);
-  const [panelFocus, setPanelFocus] = useState<FocusCoord | null>(null);
+  const [panelFocusCoords, setPanelFocusCoords] = useState<Record<string, FocusCoord> | null>(null);
   const [showOverlayInPanel, setShowOverlayInPanel] = useState(false);
   const [isPanelOpen, setIsPanelOpen] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -431,9 +434,18 @@ export default function ChatInterface() {
                 const jsonStr = buffer.slice(fi + FOCUS_MARKER_START.length, fei);
                 buffer = buffer.slice(fei + FOCUS_MARKER_END.length);
                 try {
-                  const coord: FocusCoord = JSON.parse(jsonStr);
-                  setMessages(prev => prev.map(m => m.id === assistantId
-                    ? { ...m, focusCoord: coord } : m));
+                  const parsed: Record<string, unknown> = JSON.parse(jsonStr);
+                  // Detect format: new = map of {frame_index → coord}, old = single coord object
+                  const isLegacySingleCoord = 'x_pct' in parsed && 'y_pct' in parsed;
+                  if (isLegacySingleCoord) {
+                    // Legacy: store as focusCoord for backward compat
+                    setMessages(prev => prev.map(m => m.id === assistantId
+                      ? { ...m, focusCoord: parsed as unknown as FocusCoord } : m));
+                  } else {
+                    // New: map of frame_index → coord
+                    setMessages(prev => prev.map(m => m.id === assistantId
+                      ? { ...m, focusCoords: parsed as Record<string, FocusCoord> } : m));
+                  }
                 } catch { /* fall through */ }
                 didProcess = true;
                 continue;
@@ -477,9 +489,17 @@ export default function ChatInterface() {
     }
   };
 
-  function openSources(sources: SourceNode[], focusCoord?: FocusCoord | null, withOverlay = false) {
+  function openSources(
+    sources: SourceNode[],
+    focusCoords?: Record<string, FocusCoord> | null,
+    focusCoordLegacy?: FocusCoord | null,
+    withOverlay = false
+  ) {
     setPanelSources(sources);
-    setPanelFocus(focusCoord ?? null);
+    // Merge: prefer new map, fall back to promoting legacy single coord
+    const resolvedMap: Record<string, FocusCoord> = focusCoords ?? {};
+    setPanelFocusCoords(Object.keys(resolvedMap).length > 0 ? resolvedMap
+      : focusCoordLegacy ? { '__legacy__': focusCoordLegacy } : null);
     setShowOverlayInPanel(withOverlay);
     setIsPanelOpen(true);
   }
@@ -602,7 +622,7 @@ export default function ChatInterface() {
 
                         {/* Show Me button — visible whenever there's a video source */}
                         {m.sources && m.sources.some(s => s.metadata?.type !== 'jira_ticket' && s.metadata?.type !== 'pdf_document') && (
-                          <button onClick={() => openSources(m.sources!, m.focusCoord, true)}
+                          <button onClick={() => openSources(m.sources!, m.focusCoords, m.focusCoord, true)}
                             className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-full transition-colors text-white"
                             style={{ background: '#7500C0' }}>
                             <Target size={12} /> Show Me
@@ -611,7 +631,7 @@ export default function ChatInterface() {
 
                         {/* View Source button */}
                         {m.sources && m.sources.length > 0 && (
-                          <button onClick={() => openSources(m.sources!, m.focusCoord, false)}
+                          <button onClick={() => openSources(m.sources!, m.focusCoords, m.focusCoord, false)}
                             className="text-xs font-semibold text-primary hover:underline flex items-center gap-1.5">
                             <BookOpen size={12} />
                             View Source ({m.sources.length} match{m.sources.length > 1 ? 'es' : ''})
@@ -692,11 +712,16 @@ export default function ChatInterface() {
             ? <p className="text-sm text-muted-foreground text-center mt-8">No source citations available.</p>
             : panelSources.map((src, i) => {
               const isVideoSrc = src.metadata?.type !== 'jira_ticket' && src.metadata?.type !== 'pdf_document';
-              const isTopVideo = showOverlayInPanel && i === 0 && isVideoSrc;
+              // Look up this source's coord by its frame_index
+              const frameKey = String(src.metadata?.frame_index ?? '');
+              const legacyKey = '__legacy__';
+              const cardCoord = showOverlayInPanel && isVideoSrc && panelFocusCoords
+                ? (panelFocusCoords[frameKey] ?? (i === 0 ? panelFocusCoords[legacyKey] : undefined) ?? null)
+                : null;
               return (
                 <SourceCard key={i} src={src}
-                  focusCoord={isTopVideo ? panelFocus : null}
-                  showOverlay={isTopVideo}
+                  focusCoord={cardCoord ?? null}
+                  showOverlay={showOverlayInPanel && isVideoSrc}
                 />
               );
             })
