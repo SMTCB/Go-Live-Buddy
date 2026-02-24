@@ -123,3 +123,23 @@ async def generate_pulse(request_data: dict):
         raise HTTPException(status_code=500, detail=f"Gemini returned invalid JSON. {raw}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"LLM Generation failed: {e}")
+
+@router.get("/api/debug/supabase")
+async def debug_supabase():
+    try:
+        from database import supabase_client
+        if not supabase_client:
+            return {"error": "supabase_client is None. Check SUPABASE_URL and SUPABASE_KEY env vars."}
+        
+        # Try a direct insert
+        payload = {
+            "tech_id": "debug-test",
+            "query_text": "Debug insert test",
+            "detected_process": "Debugging",
+            "user_sentiment": "Neutral"
+        }
+        res = supabase_client.table("user_queries").insert(payload).execute()
+        return {"status": "success", "data": res.data}
+    except Exception as e:
+        import traceback
+        return {"error": str(e), "traceback": traceback.format_exc()}
