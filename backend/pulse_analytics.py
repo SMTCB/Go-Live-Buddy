@@ -3,7 +3,7 @@ import google.generativeai as genai
 from database import supabase_client
 import json
 
-async def analyze_and_store_query(query_text: str, tech_id: str):
+def analyze_and_store_query(query_text: str, tech_id: str):
     if not supabase_client:
         return
 
