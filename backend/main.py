@@ -147,24 +147,71 @@ async def list_tickets():
     return JSONResponse(_load_tickets())
 
 @app.get("/api/debug/focus")
-async def debug_focus(namespace: str = "sap-pack", frame_index: int = 17, query: str = "How do I upload a journal entry file?"):
+async def debug_focus(
+    namespace: str = "sap-pack",
+    frame_index: int = 19,
+    query: str = "How do I upload a journal entry file?",
+):
     """
-    Debug endpoint: directly test Gemini Vision focus coord generation.
-    Usage: GET /api/debug/focus?namespace=sap-pack&frame_index=17&query=How+do+I+upload+a+journal+entry
+    Full pipeline diagnostic for Show Me / Gemini Vision focus coord.
+    Visit: /api/debug/focus?namespace=sap-pack&frame_index=19&query=your+question
     """
-    from agent import _get_focus_coord, _PUBLIC_FRAMES
-    import os
+    import urllib.request as _urllib
+    from agent import _PUBLIC_FRAMES, _load_frame_image, _get_focus_coord
+
+    # ── Environment ────────────────────────────────────────────────────────────
+    frontend_url = os.environ.get("FRONTEND_URL", "").rstrip("/")
+    google_key_set = bool(os.environ.get("GOOGLE_API_KEY", ""))
     frame_path = os.path.join(_PUBLIC_FRAMES, namespace, f"{frame_index}.jpg")
-    
-    # We'll use a local import trick to get the error if we want, 
-    # but for now let's just make sure agent.py returns it or we log it.
-    coord = _get_focus_coord(namespace, frame_index, query)
-    
+    local_exists = os.path.isfile(frame_path)
+
+    # ── HTTP fetch test ────────────────────────────────────────────────────────
+    frame_fetch_url = f"{frontend_url}/frames/{namespace}/{frame_index}.jpg" if frontend_url else None
+    http_fetch_ok = False
+    http_fetch_error = None
+    http_fetch_bytes = None
+    if frame_fetch_url:
+        try:
+            with _urllib.urlopen(frame_fetch_url, timeout=8) as r:
+                data = r.read()
+            http_fetch_ok = True
+            http_fetch_bytes = len(data)
+        except Exception as ex:
+            http_fetch_error = str(ex)
+
+    # ── Full coord generation ──────────────────────────────────────────────────
+    coord = None
+    coord_error = None
+    if google_key_set and (local_exists or http_fetch_ok):
+        try:
+            coord = _get_focus_coord(namespace, frame_index, query)
+        except Exception as ex:
+            coord_error = str(ex)
+
     return JSONResponse({
-        "frame_path": frame_path,
-        "frame_exists": os.path.isfile(frame_path),
-        "google_api_key_set": bool(os.environ.get("GOOGLE_API_KEY", "")),
-        "coord": coord,
-        "success": coord is not None,
-        "note": "Check backend terminal for [FocusCoord] logs if success is false"
+        "env": {
+            "FRONTEND_URL": frontend_url or "(not set)",
+            "GOOGLE_API_KEY_set": google_key_set,
+        },
+        "frame": {
+            "local_path": frame_path,
+            "local_exists": local_exists,
+            "fetch_url": frame_fetch_url,
+            "http_fetch_ok": http_fetch_ok,
+            "http_fetch_bytes": http_fetch_bytes,
+            "http_fetch_error": http_fetch_error,
+        },
+        "result": {
+            "coord": coord,
+            "coord_error": coord_error,
+            "success": coord is not None,
+        },
+        "diagnosis": (
+            "✅ Working!" if coord is not None
+            else "❌ FRONTEND_URL not set — add it to Railway env vars" if not frontend_url
+            else "❌ Frame HTTP fetch failed — check FRONTEND_URL is correct Vercel URL" if not http_fetch_ok
+            else "❌ GOOGLE_API_KEY not set in Railway" if not google_key_set
+            else f"❌ Gemini Vision failed: {coord_error or 'returned None — check Railway logs for [FocusCoord]'}"
+        ),
     })
+
