@@ -146,7 +146,7 @@ function SourceCard({ src, focusCoord, showOverlay }: { src: SourceNode; focusCo
 
   return (
     <div className="border border-border rounded-xl bg-[#FAFAFA] flex flex-col">
-      {/* Visual header */}
+      {/* ── Normal list view (View Sources mode) ── */}
       {isVideo && (effectiveFrameUrl || videoId) && !showOverlay && (
         <a href={videoLink ?? '#'} target="_blank" rel="noopener noreferrer" className="relative block group shrink-0 overflow-hidden rounded-t-xl">
           <img src={effectiveFrameUrl ?? `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`}
@@ -161,13 +161,43 @@ function SourceCard({ src, focusCoord, showOverlay }: { src: SourceNode; focusCo
           </div>
         </a>
       )}
-      {/* Show Me Overlay replaces normal frame header */}
+      {/* ── Show Me: full bounding-box overlay (focusCoord available) ── */}
       {isVideo && showOverlay && effectiveFrameUrl && focusCoord && (
         <div className="p-3">
           <ShowMeOverlayInline
             imageUrl={effectiveFrameUrl ?? `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`}
             coord={focusCoord}
           />
+        </div>
+      )}
+      {/* ── Show Me: featured large frame without coords (scanning state) ── */}
+      {isVideo && showOverlay && !focusCoord && (effectiveFrameUrl || videoId) && (
+        <div className="relative overflow-hidden rounded-t-xl bg-black">
+          <img
+            src={effectiveFrameUrl ?? `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`}
+            alt={`Frame ${frameIndex}`}
+            className="w-full object-contain block"
+          />
+          {/* scanning overlay */}
+          <div className="absolute inset-0 pointer-events-none"
+            style={{ background: 'linear-gradient(180deg, transparent 60%, rgba(117,0,192,0.35) 100%)' }} />
+          <div className="absolute bottom-0 left-0 right-0 px-4 py-3 flex items-center gap-2"
+            style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.75), transparent)' }}>
+            <span className="flex gap-0.5 items-center">
+              <span className="w-1.5 h-1.5 rounded-full bg-purple-400 animate-bounce" style={{ animationDelay: '0ms' }} />
+              <span className="w-1.5 h-1.5 rounded-full bg-purple-400 animate-bounce" style={{ animationDelay: '120ms' }} />
+              <span className="w-1.5 h-1.5 rounded-full bg-purple-400 animate-bounce" style={{ animationDelay: '240ms' }} />
+            </span>
+            <span className="text-white text-xs font-semibold">Locating relevant element…</span>
+            <a href={videoLink ?? '#'} target="_blank" rel="noopener noreferrer"
+              className="ml-auto text-purple-300 text-xs font-semibold hover:text-white transition-colors">
+              ▶ {Math.floor(timestampSec / 60)}:{String(timestampSec % 60).padStart(2, '0')}
+            </a>
+          </div>
+          {/* pulsing scan line */}
+          <div className="absolute left-0 right-0 h-0.5 animate-[scan_2s_ease-in-out_infinite]"
+            style={{ background: 'linear-gradient(90deg, transparent, #C478FF, transparent)', top: '40%' }} />
+          <style>{`@keyframes scan{0%{top:10%;opacity:0}20%{opacity:1}80%{opacity:1}100%{top:90%;opacity:0}}`}</style>
         </div>
       )}
       {isPdf && (
@@ -572,7 +602,7 @@ export default function ChatInterface() {
 
                         {/* Show Me button — visible whenever there's a video source */}
                         {m.sources && m.sources.some(s => s.metadata?.type !== 'jira_ticket' && s.metadata?.type !== 'pdf_document') && (
-                          <button onClick={() => openSources(m.sources!, m.focusCoord, !!m.focusCoord)}
+                          <button onClick={() => openSources(m.sources!, m.focusCoord, true)}
                             className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-full transition-colors text-white"
                             style={{ background: '#7500C0' }}>
                             <Target size={12} /> Show Me
@@ -645,11 +675,17 @@ export default function ChatInterface() {
 
       {/* ── Source Panel ── */}
       <div className={`fixed top-0 right-0 w-[440px] h-full bg-white border-l shadow-2xl flex flex-col transform transition-transform duration-300 z-50 ${isPanelOpen ? 'translate-x-0' : 'translate-x-full'}`}>
-        <div className="flex justify-between items-center px-6 py-5 border-b shrink-0">
-          <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
-            <BookOpen size={18} className="text-primary" /> Source Citations
+        <div className="flex justify-between items-center px-6 py-5 border-b shrink-0"
+          style={showOverlayInPanel ? { background: 'linear-gradient(135deg, #3b0075 0%, #7500C0 100%)' } : {}}>
+          <h2 className="text-lg font-bold flex items-center gap-2"
+            style={{ color: showOverlayInPanel ? '#fff' : undefined }}>
+            {showOverlayInPanel
+              ? <><Target size={18} style={{ color: '#C478FF' }} /> Show Me</>
+              : <><BookOpen size={18} className="text-primary" /> Source Citations</>}
           </h2>
-          <button onClick={() => setIsPanelOpen(false)} className="text-muted-foreground hover:text-foreground"><X size={20} /></button>
+          <button onClick={() => setIsPanelOpen(false)}
+            style={{ color: showOverlayInPanel ? 'rgba(255,255,255,0.8)' : undefined }}
+            className="text-muted-foreground hover:text-foreground transition-colors"><X size={20} /></button>
         </div>
         <div className="flex-1 overflow-y-auto p-5 flex flex-col gap-4">
           {!panelSources || panelSources.length === 0
@@ -660,7 +696,7 @@ export default function ChatInterface() {
               return (
                 <SourceCard key={i} src={src}
                   focusCoord={isTopVideo ? panelFocus : null}
-                  showOverlay={isTopVideo && panelFocus != null}
+                  showOverlay={isTopVideo}
                 />
               );
             })
