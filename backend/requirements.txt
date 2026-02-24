@@ -10,3 +10,4 @@ Pillow
 google-generativeai
 requests
 pypdf
+supabase

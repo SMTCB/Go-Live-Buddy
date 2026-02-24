@@ -12,6 +12,19 @@ load_dotenv(find_dotenv())
 pinecone_key = os.environ.get("PINECONE_API_KEY", "")
 google_key = os.environ.get("GOOGLE_API_KEY", "")
 
+# Initialize Supabase
+supabase_url = os.environ.get("SUPABASE_URL", "")
+supabase_key = os.environ.get("SUPABASE_KEY", "")
+
+from supabase import create_client, Client
+supabase_client: Client | None = None
+if supabase_url and supabase_key:
+    try:
+        supabase_client = create_client(supabase_url, supabase_key)
+    except Exception as e:
+        import logging
+        logging.error(f"Failed to initialize Supabase client: {e}")
+
 pc = Pinecone(api_key=pinecone_key) if pinecone_key else None
 index_name = "golivebuddy"
 

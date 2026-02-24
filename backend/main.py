@@ -1,6 +1,7 @@
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, JSONResponse
+from fastapi import BackgroundTasks
 from pydantic import BaseModel
 import os
 import sys
@@ -15,6 +16,7 @@ from dotenv import load_dotenv, find_dotenv
 import asyncio
 from agent import query_agent_stream
 from ingest import process_ingestion
+import pulse_analytics
 
 load_dotenv(find_dotenv())
 
@@ -44,6 +46,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(pulse_analytics.router)
+
 class IngestRequest(BaseModel):
     sourceUrl: str
     techCategory: str
@@ -54,12 +58,16 @@ def read_root():
     return {"message": "Go-Live Buddy API is running"}
 
 @app.post("/api/chat")
-async def chat_endpoint(request: Request):
+async def chat_endpoint(request: Request, background_tasks: BackgroundTasks):
     data = await request.json()
     messages = data.get("messages", [])
     namespace = data.get("namespace", "sap-pack")
     
     last_message = messages[-1]["content"] if messages else ""
+    
+    if last_message:
+        from pulse_analytics import analyze_and_store_query
+        background_tasks.add_task(analyze_and_store_query, last_message, namespace)
     
     return StreamingResponse(query_agent_stream(last_message, namespace), media_type="text/plain")
 
