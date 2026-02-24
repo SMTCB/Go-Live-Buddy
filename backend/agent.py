@@ -262,6 +262,21 @@ async def query_agent_stream(query: str, namespace: str):
         index = VectorStoreIndex.from_vector_store(vector_store, storage_context=storage_context)
         query_engine = index.as_query_engine(streaming=True, similarity_top_k=15)
 
+        from llama_index.core import PromptTemplate
+        qa_prompt_tmpl_str = (
+            "Context information is below.\n"
+            "---------------------\n"
+            "{context_str}\n"
+            "---------------------\n"
+            "Given the context information and NOT prior knowledge, answer the query.\n"
+            "Be extremely helpful. If the context does not contain the exact direct answer, but contains related steps, clues, or partial information that could assist the user, use it to synthesize a helpful response rather than refusing to answer.\n"
+            "Query: {query_str}\n"
+            "Answer: "
+        )
+        query_engine.update_prompts(
+            {"response_synthesizer:text_qa_template": PromptTemplate(qa_prompt_tmpl_str)}
+        )
+
         response = query_engine.query(query)
 
         # Capture source nodes BEFORE consuming the streaming generator
