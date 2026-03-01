@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException, BackgroundTasks
 import google.generativeai as genai
 from database import supabase_client
 import json
+import os
 
 def analyze_and_store_query(query_text: str, tech_id: str):
     if not supabase_client:
@@ -11,9 +12,11 @@ def analyze_and_store_query(query_text: str, tech_id: str):
     if not api_key:
         return
 
+    print(f"Starting analysis for query: {query_text}")
+
     try:
         genai.configure(api_key=api_key)
-        model = genai.GenerativeModel("gemini-1.5-flash") # use faster model for ingestion
+        model = genai.GenerativeModel("gemini-2.0-flash") # use faster model for ingestion
         
         prompt = (
             f"Analyze this user query: '{query_text}'\n\n"
@@ -42,6 +45,7 @@ def analyze_and_store_query(query_text: str, tech_id: str):
         supabase_client.table("user_queries").insert(payload).execute()
         
     except Exception as e:
+        print(f"Failed to analyze and store query: {e}")
         import logging
         logging.error(f"Failed to analyze and store query: {e}")
 
@@ -89,7 +93,7 @@ async def generate_pulse(request_data: dict):
 
     try:
         genai.configure(api_key=api_key)
-        model = genai.GenerativeModel("gemini-1.5-pro")
+        model = genai.GenerativeModel("gemini-2.0-flash")
         
         prompt = (
             "Act as a Change Management Expert consulting a project sponsor. Decompose the following user chat data into actionable intel.\n\n"
